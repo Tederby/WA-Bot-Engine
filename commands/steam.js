@@ -187,10 +187,34 @@ async function sendSteamDetail(appId, message, sock) {
         const metacritic = game.metacritic ? game.metacritic.score : "N/A";
         let supportedLanguages = "N/A";
         if (game.supported_languages) {
-            supportedLanguages = game.supported_languages
-                .replace(/<[^>]*>?/gm, '')
-                .replace(/bahasa dengan dukungan audio penuh/gi, '\n\n_* = Dukungan audio penuh_')
-                .replace(/languages with full audio support/gi, '\n\n_* = Full audio support_');
+            let rawLangs = game.supported_languages.replace(/<br[^>]*>[\s\S]*$/i, '');
+            rawLangs = rawLangs.replace(/<strong>\*<\/strong>\s*bahasa dengan dukungan audio penuh/gi, '');
+            rawLangs = rawLangs.replace(/\*bahasa dengan dukungan audio penuh/gi, '');
+            rawLangs = rawLangs.replace(/\*languages with full audio support/gi, '');
+
+            const audioLangs = [];
+            const textLangs = [];
+
+            rawLangs.split(',').forEach(l => {
+                let text = l.trim();
+                let hasAudio = text.includes('<strong>*</strong>') || text.includes('*');
+                text = text.replace(/<[^>]*>?/gm, '').replace(/\*/g, '').trim();
+                
+                if (text) {
+                    if (hasAudio) audioLangs.push(text);
+                    else textLangs.push(text);
+                }
+            });
+
+            let formatArr = [];
+            if (audioLangs.length > 0) {
+                formatArr.push(`🔊 *UI, Audio & Subtitle:*\n${audioLangs.join(', ')}`);
+            }
+            if (textLangs.length > 0) {
+                formatArr.push(`💬 *UI & Subtitle:*\n${textLangs.join(', ')}`);
+            }
+
+            supportedLanguages = formatArr.join('\n\n');
         }
 
         let priceText = "Gratis";
