@@ -30,7 +30,7 @@ export default {
         }
 
         let menuText = `*👾 ${setting.name || "Bot Menu"} 👾*\n`;
-        menuText += `_Prefix: ${setting.prefixes.join(" ")} _\n\n`;
+        menuText += `_Prefix: ${setting.prefixes.join(" ")}_\n\n`;
 
         // Sort categories by CATEGORY_LABELS order, unknowns at end
         const orderedKeys = [...Object.keys(CATEGORY_LABELS)];
