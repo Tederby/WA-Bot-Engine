@@ -7,6 +7,8 @@ const CATEGORY_LABELS = {
     media: "🖼️ Media",
     download: "📥 Download",
     anime: "🎌 Anime",
+    admin: "🔑 Admin",
+    owner: "👑 Owner"
 };
 
 /** Fallback label for commands without a category. */
