@@ -1,4 +1,5 @@
 import axios from "axios";
+import https from "https";
 import { registerReplyHandler } from "./_registry.js";
 
 const ITEMS_PER_PAGE = 5;
@@ -57,9 +58,9 @@ export default {
 
         try {
             const response = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=20`, {
-                timeout: 15000, // Timeout 15 detik agar bot tidak menggantung lama
+                timeout: 15000, // Timeout 15 detik
+                httpsAgent: new https.Agent({ family: 4 }), // Paksa IPv4
                 headers: {
-                    // Menyamarkan request axios seperti browser asli untuk mencoba melewati blokir Cloudflare
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 }
             });
