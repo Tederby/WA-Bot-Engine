@@ -15,26 +15,31 @@ function generateListText(results, page, query) {
     const end = start + ITEMS_PER_PAGE;
     const currentItems = results.slice(start, end);
 
-    let text = `🎮 *Hasil Pencarian Steam: ${query}* (Page ${page + 1}/${totalPages})\n\n`;
+    let text = `🎮 *S T E A M  S E A R C H*\n`;
+    text += `──────────────────\n`;
+    text += `🔍 *Query:* ${query}\n`;
+    text += `📄 *Page:* ${page + 1}/${totalPages}\n`;
+    text += `──────────────────\n\n`;
     
     currentItems.forEach((game, index) => {
         let priceText = "Gratis / Tidak Tersedia";
         if (game.price) {
             if (game.price.initial > game.price.final) {
-                priceText = `~${formatRupiah(game.price.initial)}~ ${formatRupiah(game.price.final)}`;
+                priceText = `~${formatRupiah(game.price.initial)}~ ➡️ *${formatRupiah(game.price.final)}*`;
             } else {
-                priceText = formatRupiah(game.price.final);
+                priceText = `*${formatRupiah(game.price.final)}*`;
             }
         }
         
-        text += `${start + index + 1}. *${game.name}*\n`;
-        text += `   💰 Harga: ${priceText}\n\n`;
+        text += `*${start + index + 1}. ${game.name}*\n`;
+        text += `↳ 💰 ${priceText}\n\n`;
     });
 
-    text += `Balas pesan ini dengan:\n`;
-    text += `👉 *Angka (1-${results.length})* untuk melihat detail info\n`;
-    if (page < totalPages - 1) text += `👉 *'n'* atau *'next'* untuk halaman selanjutnya\n`;
-    if (page > 0) text += `👉 *'b'* atau *'back'* untuk halaman sebelumnya\n`;
+    text += `──────────────────\n`;
+    text += `💡 *Navigasi:*\n`;
+    text += `└ Reply angka *1-${results.length}* untuk detail.\n`;
+    if (page < totalPages - 1) text += `└ Reply *'n'* untuk lanjut (next).\n`;
+    if (page > 0) text += `└ Reply *'b'* untuk kembali (back).\n`;
 
     return text.trim();
 }

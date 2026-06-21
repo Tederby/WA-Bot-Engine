@@ -10,17 +10,22 @@ function generateListText(results, page, query) {
     const end = start + ITEMS_PER_PAGE;
     const currentItems = results.slice(start, end);
 
-    let text = `🎌 *Hasil Pencarian Anime: ${query}* (Page ${page + 1}/${totalPages})\n\n`;
+    let text = `🎌 *A N I M E  S E A R C H*\n`;
+    text += `──────────────────\n`;
+    text += `🔍 *Query:* ${query}\n`;
+    text += `📄 *Page:* ${page + 1}/${totalPages}\n`;
+    text += `──────────────────\n\n`;
     
     currentItems.forEach((anime, index) => {
-        text += `${start + index + 1}. *${anime.title}* (${anime.type || "N/A"})\n`;
-        text += `   ⭐ Score: ${anime.score || "N/A"} | 🎬 Eps: ${anime.episodes || "N/A"}\n\n`;
+        text += `*${start + index + 1}. ${anime.title}*\n`;
+        text += `↳ 📺 Type: ${anime.type || "N/A"} | ⭐ ${anime.score || "N/A"} | 🎬 Eps: ${anime.episodes || "N/A"}\n\n`;
     });
 
-    text += `Balas pesan ini dengan:\n`;
-    text += `👉 *Angka (1-${results.length})* untuk melihat detail info\n`;
-    if (page < totalPages - 1) text += `👉 *'n'* atau *'next'* untuk halaman selanjutnya\n`;
-    if (page > 0) text += `👉 *'b'* atau *'back'* untuk halaman sebelumnya\n`;
+    text += `──────────────────\n`;
+    text += `💡 *Navigasi:*\n`;
+    text += `└ Reply angka *1-${results.length}* untuk detail.\n`;
+    if (page < totalPages - 1) text += `└ Reply *'n'* untuk lanjut (next).\n`;
+    if (page > 0) text += `└ Reply *'b'* untuk kembali (back).\n`;
 
     return text.trim();
 }
