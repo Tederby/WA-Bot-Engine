@@ -50,7 +50,7 @@ export default {
         let menuText = `╭━━━〔 👾 ${setting.name || "Bot Menu"} 👾 〕━━━\n`;
         menuText += `┃ 💻 Prefix : [ ${setting.prefixes.join(" / ")} ]\n`;
         menuText += `┃ ⏱️ Uptime : ${uptimeStr}\n`;
-        menuText += `┃ ⚠️ Menu akan timeout dalam 30 detik\n`;
+        menuText += `┃ ⚠️ Menu akan timeout dalam 1 menit\n`;
         menuText += `╰━━━━━━━━━━━━━━━━━━━━\n\n`;
 
         // Sort categories by CATEGORY_LABELS order, unknowns at end
@@ -91,6 +91,6 @@ export default {
             } catch (err) {
                 console.error("[MENU] Gagal edit timeout:", err.message);
             }
-        }, 30000);
+        }, 60000);
     }
 };
