@@ -93,10 +93,13 @@ export default {
             if (userData.registered) {
                 caption += `│ ⋄ Status : ✅ Terdaftar\n`;
                 if (regDate) caption += `│ ⋄ Sejak  : ${regDate}\n`;
+                if (target === sender) {
+                    caption += `│   └ _Ketik \`${prefix}register\` untuk pengaturan_\n`;
+                }
             } else {
                 caption += `│ ⋄ Status : ❌ Belum terdaftar\n`;
                 if (target === sender) {
-                    caption += `│   └ _Ketik ${prefix}register untuk mendaftar_\n`;
+                    caption += `│   └ _Ketik \`${prefix}register\` untuk mendaftar_\n`;
                 }
             }
             caption += `╰──────────────\n\n`;
