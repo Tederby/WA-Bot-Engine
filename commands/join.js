@@ -4,13 +4,10 @@ export default {
     category: "owner",
     description: "Menggabungkan bot ke dalam grup menggunakan link invite.",
     usage: "!join <link grup>",
+    ownerOnly: true,
 
-    async handler({ message, sock, args, isOwner }) {
+    async handler({ message, sock, args }) {
         try {
-            if (!isOwner) {
-                return message.reply("Perintah ini hanya bisa digunakan oleh owner bot.");
-            }
-
             const link = args[0];
             if (!link) {
                 return message.reply("Harap masukkan link grup WhatsApp.\nContoh: *!join https://chat.whatsapp.com/ABCD1234EFGH5678*");

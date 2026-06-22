@@ -6,21 +6,12 @@ export default {
     category: "admin",
     description: "Menambahkan member ke dalam grup berdasarkan nomor WA.",
     usage: "!add 628xxx",
+    groupOnly: true,
+    adminOnly: true,
+    botAdminRequired: true,
 
-    async handler({ message, sock, isGroup, isGroupAdmins, isBotGroupAdmins, groupMetadata, sender, args }) {
+    async handler({ message, sock, groupMetadata, sender, args }) {
         try {
-            if (!isGroup) {
-                return message.reply("Perintah ini hanya bisa digunakan dalam grup!");
-            }
-
-            if (!isGroupAdmins) {
-                return message.reply("Kamu bukan admin grup.");
-            }
-
-            if (!isBotGroupAdmins) {
-                return message.reply("Bot bukan admin grup, tidak bisa menambahkan member.");
-            }
-
             if (args.length === 0) {
                 return message.reply("Harap masukkan nomor WhatsApp yang ingin ditambahkan!\nContoh: *!add 6281234567890*");
             }

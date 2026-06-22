@@ -1,10 +1,10 @@
 /**
  * Message Handler — Clean Pipeline Architecture
  *
- * Pipeline: guard → context → reply-handler → auto-detect → parse → spam-filter → execute
+ * Pipeline: guard → ban-check → context → reply-handler → auto-detect → parse → spam-filter → permissions → execute
  *
  * Each step is clearly separated. Adding new middleware (e.g. owner-only check,
- * group-only check) is straightforward.
+ * group-only check) is straightforward via declarative command flags.
  */
 
 import { msgFilter } from "./lib/utils.js";
@@ -13,6 +13,8 @@ import { getCommand, getReplyHandler } from "./commands/_registry.js";
 import { buildContext } from "./lib/contextBuilder.js";
 import { runAutoDetects } from "./lib/autoDetect.js";
 import { logger } from "./lib/logger.js";
+import { checkPermissions } from "./lib/middleware.js";
+import { isBanned, isGroupBanned } from "./lib/database.js";
 import setting from "./setting.js";
 
 let msgHandler = async (upsert, sock, message) => {
@@ -28,6 +30,11 @@ let msgHandler = async (upsert, sock, message) => {
         // ── Build context ───────────────────────────────────────────
         const ctx = await buildContext(message, sock);
         if (!ctx.sender) return;
+
+        // ── Global ban checks (silent — no response) ────────────────
+        // Checked early to avoid wasting resources on banned entities.
+        if (ctx.isGroup && isGroupBanned(message.chat)) return;
+        if (isBanned(ctx.sender)) return;
 
         // ── Block check (group only) ────────────────────────────────
         if (ctx.isGroup) {
@@ -76,7 +83,14 @@ let msgHandler = async (upsert, sock, message) => {
         }
         msgFilter.addFilter(message.chat, setting.spamDelay);
 
-        // ── 5. Log & Execute ────────────────────────────────────────
+        // ── 5. Permission Guard (Middleware) ────────────────────────
+        const guardMsg = checkPermissions(cmd, { ...ctx, chatId: message.chat });
+        if (guardMsg) {
+            await message.reply(guardMsg);
+            return;
+        }
+
+        // ── 6. Log & Execute ────────────────────────────────────────
         logger.exec(t, cmdLabel, ctx.pushname, ctx.isGroup, ctx.groupName);
         await sock.readMessages([message.key]);
 

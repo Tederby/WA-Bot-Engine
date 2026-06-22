@@ -6,17 +6,11 @@ export default {
     category: 'admin',
     description: 'Mengatur fitur pesan perpisahan di grup',
     usage: '!goodbye [on|off|set] [teks]',
+    groupOnly: true,
+    adminOnly: true,
 
-    async handler({ message, isGroup, isGroupAdmins, isOwner, args, rawArgs, prefix }) {
+    async handler({ message, args, rawArgs, prefix }) {
         try {
-            if (!isGroup) {
-                return message.reply("Perintah ini hanya bisa digunakan di dalam grup!");
-            }
-
-            if (!isGroupAdmins && !isOwner) {
-                return message.reply('Kamu bukan Admin grup dan bukan owner bot!');
-            }
-
             const chatId = message.chat;
             const sub = args[0]?.toLowerCase();
             const config = getGroupConfig(chatId);

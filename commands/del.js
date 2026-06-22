@@ -4,13 +4,10 @@ export default {
     category: "admin",
     description: "Menghapus pesan pengguna di group",
     usage: "!delete (reply to a message)",
+    groupOnly: true,
 
-    async handler({ message, sock, isGroup, isGroupAdmins, isBotGroupAdmins }) {
+    async handler({ message, sock, isGroupAdmins, isBotGroupAdmins }) {
         try {
-            if (!isGroup) {
-                return message.reply("Perintah ini hanya bisa digunakan dalam grup!");
-            }
-
             const contextInfo = message.contextInfo;
             const quotedMessage = contextInfo?.quotedMessage;
             const quotedKey = contextInfo?.stanzaId;

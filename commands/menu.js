@@ -3,6 +3,7 @@ import setting from "../setting.js";
 
 /** Display name for each category. */
 const CATEGORY_LABELS = {
+    general: "👤 General",
     utility: "🔧 Utility",
     media: "🖼️ Media",
     download: "📥 Download",

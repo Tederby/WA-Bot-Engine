@@ -4,13 +4,10 @@ export default {
     category: "owner",
     description: "Mengganti nama profil (username) bot.",
     usage: "!setname <nama baru>",
+    ownerOnly: true,
 
-    async handler({ message, sock, args, isOwner }) {
+    async handler({ message, sock, args }) {
         try {
-            if (!isOwner) {
-                return message.reply("Perintah ini hanya bisa digunakan oleh owner bot.");
-            }
-
             const newName = args.join(" ");
             if (!newName) {
                 return message.reply("Harap masukkan nama baru untuk bot.\nContoh: *!setname Tederby Bot*");

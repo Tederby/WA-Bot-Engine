@@ -6,21 +6,12 @@ export default {
     category: "admin",
     description: "Mengeluarkan member dari grup.",
     usage: "!kick @user (atau reply pesan)",
+    groupOnly: true,
+    adminOnly: true,
+    botAdminRequired: true,
 
-    async handler({ message, sock, isGroup, isGroupAdmins, isBotGroupAdmins, groupMetadata, sender }) {
+    async handler({ message, sock, groupMetadata, sender }) {
         try {
-            if (!isGroup) {
-                return message.reply("Perintah ini hanya bisa digunakan dalam grup!");
-            }
-
-            if (!isGroupAdmins) {
-                return message.reply("Kamu bukan admin grup.");
-            }
-
-            if (!isBotGroupAdmins) {
-                return message.reply("Bot bukan admin grup, tidak bisa mengeluarkan member.");
-            }
-
             let target = null;
             if (message.mentionedJid && message.mentionedJid.length > 0) {
                 target = message.mentionedJid[0];
