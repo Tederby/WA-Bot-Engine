@@ -23,7 +23,10 @@ export default {
                 // Generate ID from 1 to 11642728
                 const randomId = Math.floor(Math.random() * 11642728) + 1;
                 try {
-                    await fetchDanbooruPost(randomId);
+                    const postData = await fetchDanbooruPost(randomId);
+                    // Jika post eksplisit, skip dan coba cari lagi (jangan dihitung valid)
+                    if (postData.rating === 'e') continue;
+                    
                     validId = randomId;
                     break;
                 } catch (err) {
