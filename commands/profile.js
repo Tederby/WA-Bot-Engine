@@ -56,25 +56,37 @@ export default {
             let pfpUrl = null;
             
             try {
-                // Mencoba mem-fetch URL foto profil dengan JID yang ditemukan.
-                // Jika user menggunakan mode LID (privasi nomor baru WA), request dengan LID akan tetap jalan.
-                console.log(`[DEBUG-PROFILE] Memanggil sock.profilePictureUrl untuk JID: ${target}`);
+                // Mencoba mem-fetch URL foto profil dengan JID yang ditemukan (Full Resolution)
+                console.log(`[DEBUG-PROFILE] Memanggil sock.profilePictureUrl untuk JID: ${target} (tipe: image)`);
                 pfpUrl = await sock.profilePictureUrl(target, 'image');
-                console.log("[DEBUG-PROFILE] Berhasil mendapatkan PFP URL:", pfpUrl);
-            } catch (err) {
-                console.log("[DEBUG-PROFILE] Gagal mendapatkan PFP URL pada percobaan pertama. Error:", err.message);
                 
-                // Fallback jika JID tidak berhasil (Misal nomor ada : / session device di dalamnya)
-                if (target !== normalizedTarget) {
-                    try {
-                        console.log(`[DEBUG-PROFILE] Mencoba fallback dengan Normalized Target: ${normalizedTarget}`);
-                        pfpUrl = await sock.profilePictureUrl(normalizedTarget, 'image');
-                        console.log("[DEBUG-PROFILE] Berhasil mendapatkan PFP URL (Fallback):", pfpUrl);
-                    } catch (fallbackErr) {
-                         console.log("[DEBUG-PROFILE] Fallback juga gagal. Kemungkinan user privasi/tidak pakai PFP. Error:", fallbackErr.message);
+                if (!pfpUrl) throw new Error("PFP URL undefined (Full-res tidak tersedia)");
+                console.log("[DEBUG-PROFILE] Berhasil mendapatkan PFP URL (Full):", pfpUrl);
+            } catch (err) {
+                console.log("[DEBUG-PROFILE] Gagal mendapatkan PFP Full-res. Error:", err.message);
+                
+                // Fallback 1: Coba ambil resolusi rendah ('preview')
+                try {
+                    console.log(`[DEBUG-PROFILE] Mencoba mem-fetch PFP resolusi rendah (tipe: preview) untuk: ${target}`);
+                    pfpUrl = await sock.profilePictureUrl(target, 'preview');
+                    if (!pfpUrl) throw new Error("PFP URL undefined (Preview tidak tersedia)");
+                    console.log("[DEBUG-PROFILE] Berhasil mendapatkan PFP URL (Preview):", pfpUrl);
+                } catch (previewErr) {
+                    console.log("[DEBUG-PROFILE] Gagal mendapatkan PFP Preview. Error:", previewErr.message);
+                    
+                    // Fallback 2: Jika target beda dengan normalizedTarget (misal ada karakter ekstra di sesi)
+                    if (target !== normalizedTarget) {
+                        try {
+                            console.log(`[DEBUG-PROFILE] Mencoba fallback dengan Normalized Target: ${normalizedTarget}`);
+                            pfpUrl = await sock.profilePictureUrl(normalizedTarget, 'preview');
+                            if (!pfpUrl) throw new Error("PFP URL undefined pada fallback normalisasi");
+                            console.log("[DEBUG-PROFILE] Berhasil mendapatkan PFP URL (Fallback Normalized):", pfpUrl);
+                        } catch (fallbackErr) {
+                             console.log("[DEBUG-PROFILE] Fallback normalisasi juga gagal. Kemungkinan besar PFP diprivasi atau tidak ada.");
+                        }
+                    } else {
+                        console.log("[DEBUG-PROFILE] Semua upaya fetching PFP gagal. Target tidak memakai PFP atau diprivasi.");
                     }
-                } else {
-                    console.log("[DEBUG-PROFILE] Tidak mencoba fallback karena target sudah ternormalisasi.");
                 }
             }
 
