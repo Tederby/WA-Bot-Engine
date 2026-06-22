@@ -1,6 +1,6 @@
 export default {
     name: "delete",
-    aliases: ["d", "del"],
+    aliases: ["del"],
     category: "admin",
     description: "Menghapus pesan pengguna di group",
     usage: "!delete (reply to a message)",
@@ -27,7 +27,7 @@ export default {
             if (!isQuotedFromBot && !isGroupAdmins) {
                 return message.reply("Kamu bukan admin grup dan hanya bisa menghapus pesan dari bot.");
             }
-            
+
             // Jika bukan pesan bot dan bot bukan admin, tolak
             if (!isQuotedFromBot && !isBotGroupAdmins) {
                 return message.reply("Bot bukan admin grup, tidak bisa menghapus pesan pengguna lain.");
