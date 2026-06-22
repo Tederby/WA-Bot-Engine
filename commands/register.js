@@ -9,7 +9,7 @@ import { registerUser, unregisterUser, isRegistered, getUser } from "../lib/data
 
 export default {
     name: "register",
-    aliases: ["reg", "daftar"],
+    aliases: ["reg", "daftar", "registrasi"],
     category: "general",
     description: "Mendaftarkan diri ke database bot.",
     usage: "!register | !unregister",
