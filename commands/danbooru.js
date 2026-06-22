@@ -2,7 +2,7 @@ import { handleDanbooruRequest } from "../lib/danbooru.js";
 
 export default {
     name: "danbooru",
-    aliases: ["d"],
+    aliases: ["dan", "dnbooru"],
     category: "anime",
     description: "Ambil gambar dari Danbooru menggunakan ID atau Link",
     usage: "!d <post_id or URL>",
