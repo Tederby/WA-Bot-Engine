@@ -251,7 +251,7 @@ export function getBestFormatUnderLimit(formats, maxSize) {
     });
 
     const videos = safeFormats
-        .filter((f) => f.vcodec && f.vcodec !== "none")
+        .filter((f) => f.vcodec && f.vcodec !== "none" && (!f.height || f.height <= 720))
         .sort((a, b) => {
             const hA = a.height || 0;
             const hB = b.height || 0;

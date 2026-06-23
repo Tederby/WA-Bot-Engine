@@ -152,8 +152,8 @@ async function downloadReplyHandler({ message, sock, state }) {
 
     const { video, messageKey } = state;
 
-    // Ubah pesan detail menjadi loading (Sertakan URL agar thumbnail preview WA tidak hilang)
-    await sock.sendMessage(message.chat, { text: `⏳ Mengunduh *${video.title}* sebagai ${format.toUpperCase()}...\n🔗 ${video.url}`, edit: messageKey });
+    // Ubah pesan detail menjadi loading
+    await sock.sendMessage(message.chat, { text: `⏳ Mengunduh *${video.title}* sebagai ${format.toUpperCase()}...`, edit: messageKey });
 
     deleteReplyHandler(messageKey.id);
 
@@ -169,7 +169,7 @@ async function downloadReplyHandler({ message, sock, state }) {
                 formatStr = "bv*[height<=720]+ba/b";
             }
         }
-        
+
         await downloadQueue.acquire();
         let filePath;
         try {
@@ -214,16 +214,16 @@ async function downloadReplyHandler({ message, sock, state }) {
             }
         }
 
-        await sock.sendMessage(message.chat, { 
-            text: `✅ Berhasil dikirim!\n🔗 ${video.url}\n💡 Reply pesan ini dalam 60 detik dengan \`-docs\` untuk meminta file ini sebagai dokumen, atau \`-resend\` untuk media.`, 
-            edit: messageKey 
+        await sock.sendMessage(message.chat, {
+            text: `✅ Berhasil dikirim!\n💡 Reply pesan ini dalam 60 detik dengan \`-docs\` untuk meminta file ini sebagai dokumen, atau \`-resend\` untuk media.`,
+            edit: messageKey
         });
-        
+
         // Timeout logic untuk menghapus file dari cache sementara
         const timeoutId = setTimeout(async () => {
             deleteReplyHandler(messageKey.id);
             tryDelete(filePath);
-            await sock.sendMessage(message.chat, { text: `✅ Berhasil dikirim!\n🔗 ${video.url}`, edit: messageKey }).catch(() => {});
+            await sock.sendMessage(message.chat, { text: `✅ Berhasil dikirim!`, edit: messageKey }).catch(() => { });
         }, 60000);
 
         registerReplyHandler(messageKey.id, resendReplyHandler, {
@@ -246,14 +246,14 @@ async function resendReplyHandler({ message, sock, state }) {
     if (text !== "-docs" && text !== "-resend") return;
 
     const { filePath, video, format, messageKey, timeoutId } = state;
-    
+
     // Clear the timeout so it doesn't delete our file while we send
     clearTimeout(timeoutId);
     // Remove handler immediately
     deleteReplyHandler(messageKey.id);
 
     try {
-        await sock.sendMessage(message.chat, { text: `⏳ Mengirim ulang...\n🔗 ${video.url}`, edit: messageKey });
+        await sock.sendMessage(message.chat, { text: `⏳ Mengirim ulang...`, edit: messageKey });
         const isDocs = text === "-docs";
         const captionStr = `🎬 *${video.title}*\n🔗 ${video.url}`;
 
@@ -277,10 +277,10 @@ async function resendReplyHandler({ message, sock, state }) {
                 }, { quoted: message });
             }
         }
-        await sock.sendMessage(message.chat, { text: `✅ Berhasil dikirim!\n🔗 ${video.url}`, edit: messageKey });
+        await sock.sendMessage(message.chat, { text: `✅ Berhasil dikirim!`, edit: messageKey });
     } catch (err) {
         console.error("[YTSearch Resend]", err);
-        await sock.sendMessage(message.chat, { text: `❌ Gagal mengirim ulang.\n🔗 ${video.url}`, edit: messageKey });
+        await sock.sendMessage(message.chat, { text: `❌ Gagal mengirim ulang.`, edit: messageKey });
     } finally {
         tryDelete(filePath);
     }
