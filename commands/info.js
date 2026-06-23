@@ -37,7 +37,7 @@ export default {
     description: "Menampilkan informasi sistem dan statistik bot",
     usage: "!info",
 
-    async handler({ message, sock }) {
+    async handler({ message, sock, prefix }) {
         try {
             // ── Bot info ────────────────────────────────────────────
             const commands = getAllCommands();
