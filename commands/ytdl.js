@@ -17,7 +17,7 @@ import setting from "../setting.js";
 
 export default {
     name: "ytdl",
-    aliases: ["yt", "video", "ytv"],
+    aliases: ["yt", "video", "ytv", "mp4"],
     category: "download",
     description: "Quick video/audio download (auto format)",
     usage: "!ytdl <url>",
@@ -44,7 +44,7 @@ export default {
         // ── 2. Find best format that fits under the video size limit ─
         const maxSize = setting.ytdlp.maxFileSize;
         const bestFormatInfo = getBestFormatUnderLimit(info.formats, maxSize);
-        
+
         let chosenFormat = "bv*[height<=720]+ba/b"; // fallback
         if (bestFormatInfo) {
             chosenFormat = bestFormatInfo.formatStr;

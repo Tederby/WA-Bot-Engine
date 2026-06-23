@@ -255,10 +255,16 @@ export function getBestFormatUnderLimit(formats, maxSize) {
         .sort((a, b) => {
             const hA = a.height || 0;
             const hB = b.height || 0;
-            if (hA !== hB) return hB - hA; // Sort by height descending
-            const tbrA = a.tbr || a.abr || 0;
-            const tbrB = b.tbr || b.abr || 0;
-            return tbrB - tbrA;
+            if (hA !== hB) return hB - hA; // Resolusi tertinggi diutamakan (<= 720p)
+            
+            // Untuk resolusi yang sama, pilih ukuran file/bitrate yang paling kecil
+            const sizeA = a.filesize || a.filesize_approx || 0;
+            const sizeB = b.filesize || b.filesize_approx || 0;
+            if (sizeA && sizeB && sizeA !== sizeB) return sizeA - sizeB;
+
+            const tbrA = a.tbr || a.vbr || 0;
+            const tbrB = b.tbr || b.vbr || 0;
+            return tbrA - tbrB;
         });
 
     const audios = safeFormats

@@ -126,7 +126,7 @@ async function listReplyHandler({ message, sock, state }) {
         detailText += `👤 *Creator:* ${video.channelTitle}\n`;
         detailText += `⏱️ *Durasi:* ${video.duration}\n`;
         detailText += `🔗 *URL:* ${video.url}\n\n`;
-        detailText += `💡 _Balas pesan ini dengan \`mp4\` atau \`mp3\` untuk mendownload._\n`;
+        detailText += `💡 _Balas pesan ini dengan \`mp4\` atau \`mp3\` *TANPA PREFIX* untuk mendownload._\n`;
         detailText += `_(Tambahkan \`-docs\` untuk mengirim via dokumen)_`;
 
         const detailMsg = await sock.sendMessage(message.chat, { text: detailText }, { quoted: message });
