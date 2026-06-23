@@ -5,4 +5,5 @@ package-lock.json
 !/temp/.gitkeep
 .env
 database.json
+database_reminders.json
 .agents/*
