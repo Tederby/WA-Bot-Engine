@@ -31,7 +31,9 @@ export default {
                 const errorMsg = String(err).toLowerCase();
 
                 // Edge cases handling based on common Baileys/WhatsApp errors
-                if (errorMsg.includes("not-authorized") || errorMsg.includes("401") || errorMsg.includes("forbidden")) {
+                if (errorMsg.includes("account_reachout_restricted")) {
+                    message.reply("Gagal bergabung: Akun bot sedang dibatasi (restricted) oleh pihak WhatsApp untuk bergabung ke grup baru atau berinteraksi dengan kontak baru. Hal ini biasa terjadi sebagai tindakan anti-spam dari WhatsApp. Silakan coba lagi nanti.");
+                } else if (errorMsg.includes("not-authorized") || errorMsg.includes("401") || errorMsg.includes("forbidden")) {
                     message.reply("Gagal bergabung: Bot mungkin telah dikeluarkan atau di-banned dari grup tersebut.");
                 } else if (errorMsg.includes("404") || errorMsg.includes("not-found")) {
                     message.reply("Gagal bergabung: Link grup sudah di-reset (revoked) atau grup tidak ditemukan.");
