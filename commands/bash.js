@@ -10,8 +10,8 @@
  * Special sub-commands:
  *   $ reset   — Kill current session, next command starts fresh
  *
- * Output is always wrapped in WhatsApp monospace code blocks (```).
- * Uses message editing instead of sending two separate messages.
+ * Output styled with p10k-inspired unicode, showing cwd, timestamp, exit
+ * code, and execution time. Uses message editing instead of double-send.
  *
  * Security: ownerOnly — only owner numbers can execute this command.
  */
@@ -105,12 +105,15 @@ function destroySession(sender) {
 
 /**
  * Execute a command inside a persistent session using marker-based delimiting.
+ * After the command, captures cwd and user for the p10k-style prompt.
  * Stderr is merged into stdout with 2>&1 so output order matches a real terminal.
  */
 function executeInSession(session, command) {
     return new Promise((resolve) => {
         const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         const marker = `__XEND_${id}__`;
+        // Metadata marker to capture cwd and user after execution
+        const metaMarker = `__META_${id}__`;
 
         let output = "";
         let resolved = false;
@@ -123,7 +126,7 @@ function executeInSession(session, command) {
             try { session.proc.stdin.write("\x03\n"); } catch { /* ignore */ }
             cleanup();
             session.busy = false;
-            resolve({ output: output.trimEnd(), code: 130, killed: true });
+            resolve({ output: output.trimEnd(), code: 130, killed: true, cwd: "?", user: "?" });
         }, EXEC_TIMEOUT);
 
         function cleanup() {
@@ -133,48 +136,69 @@ function executeInSession(session, command) {
 
         function onData(chunk) {
             output += chunk.toString();
-            const idx = output.indexOf(marker);
+            const idx = output.indexOf(metaMarker);
             if (idx !== -1) {
                 if (resolved) return;
                 resolved = true;
                 clearTimeout(timeout);
 
-                const body = output.substring(0, idx);
-                const tail = output.substring(idx + marker.length);
-                const exitMatch = tail.match(/:(\d+)/);
+                // Split: command output | marker:exitcode | metadata
+                const markerIdx = output.indexOf(marker);
+                const cmdOutput = markerIdx !== -1
+                    ? output.substring(0, markerIdx)
+                    : output.substring(0, idx);
+
+                // Parse exit code from between marker and metaMarker
+                const between = markerIdx !== -1
+                    ? output.substring(markerIdx + marker.length, idx)
+                    : "";
+                const exitMatch = between.match(/:(\d+)/);
                 const code = exitMatch ? parseInt(exitMatch[1]) : 0;
+
+                // Parse metadata (cwd:user) after metaMarker
+                const metaTail = output.substring(idx + metaMarker.length);
+                const metaMatch = metaTail.match(/([^|]*)\|([^\n]*)/);
+                const cwd = metaMatch ? metaMatch[1].trim() : "~";
+                const user = metaMatch ? metaMatch[2].trim() : "root";
 
                 cleanup();
                 session.busy = false;
-                resolve({ output: body.trimEnd(), code, killed: false });
+                resolve({
+                    output: cmdOutput.trimEnd(),
+                    code,
+                    killed: false,
+                    cwd,
+                    user,
+                });
             }
         }
 
         function onStderr(chunk) {
-            // stderr shouldn't contain marker, but collect it for edge cases
             output += chunk.toString();
         }
 
         session.proc.stdout.on("data", onData);
         session.proc.stderr.on("data", onStderr);
 
-        // If this is a brand-new session, drain any startup noise first
+        // Build the command sequence:
+        // 1. Run user command (stderr → stdout)
+        // 2. Capture exit code via marker
+        // 3. Capture cwd and user via metaMarker
+        const cmdSequence = [
+            `${command} 2>&1`,
+            `__exit_code__=$?; echo "${marker}:$__exit_code__"`,
+            `echo "${metaMarker}$(pwd)|$(whoami)"`,
+        ].join("\n") + "\n";
+
         if (session.new) {
             session.new = false;
-            const drainMarker = `__DRAIN_${id}__`;
-            session.proc.stdin.write(
-                `echo "${drainMarker}" > /dev/null 2>&1\n`
-            );
-            // Small delay to let startup output flush, then send actual command
+            // Drain startup noise first
+            session.proc.stdin.write(`true\n`);
             setTimeout(() => {
-                session.proc.stdin.write(
-                    `${command} 2>&1\necho "${marker}:$?"\n`
-                );
+                session.proc.stdin.write(cmdSequence);
             }, 200);
         } else {
-            session.proc.stdin.write(
-                `${command} 2>&1\necho "${marker}:$?"\n`
-            );
+            session.proc.stdin.write(cmdSequence);
         }
     });
 }
@@ -192,7 +216,85 @@ function stripAnsi(str) {
  */
 function truncate(text, maxLen) {
     if (text.length <= maxLen) return text;
-    return text.slice(0, maxLen) + `\n\n... [terpotong, ${text.length - maxLen} karakter lagi]`;
+    return text.slice(0, maxLen) + `\n\n… [+${text.length - maxLen} chars]`;
+}
+
+/**
+ * Shorten home directory in path for display (like p10k).
+ * /root/wa-bot → ~/wa-bot
+ */
+function shortPath(cwd, user) {
+    const home = user === "root" ? "/root" : `/home/${user}`;
+    if (cwd === home) return "~";
+    if (cwd.startsWith(home + "/")) return "~" + cwd.substring(home.length);
+    return cwd;
+}
+
+/**
+ * Get current WIB timestamp (HH:mm).
+ */
+function timeWIB() {
+    return new Date().toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "Asia/Jakarta",
+    });
+}
+
+/**
+ * Format elapsed time smartly.
+ */
+function fmtElapsed(ms) {
+    if (ms < 1000) return `${ms}ms`;
+    const s = (ms / 1000).toFixed(1);
+    if (ms < 60_000) return `${s}s`;
+    const m = Math.floor(ms / 60_000);
+    const sec = Math.floor((ms % 60_000) / 1000);
+    return `${m}m${sec}s`;
+}
+
+/**
+ * Build p10k-style formatted output.
+ *
+ * ╭─ 🖥 root@vps ⋄ ~/wa-bot
+ * ╰─ $ ls -la
+ * ────────────────────
+ * total 48
+ * drwxr-xr-x  5 root ...
+ * ────────────────────
+ * ╭─ ✅ 0 ⋄ ⏱ 0.2s ⋄ 🕐 17:48
+ * ╰─ ~/wa-bot $
+ */
+function formatOutput({ command, output, code, elapsed, cwd, user, killed }) {
+    const displayPath = shortPath(cwd, user);
+    const hostname = isVPS ? os.hostname() : "vps";
+    const time = timeWIB();
+    const exitIcon = code === 0 ? "✅" : "❌";
+    const elapsedStr = fmtElapsed(elapsed);
+
+    let text = "";
+
+    // ── Prompt header (before command) ──────────────────
+    text += `╭─ 🖥 ${user}@${hostname} ⋄ ${displayPath}\n`;
+    text += `╰─ $ ${command}\n`;
+
+    // ── Output body ─────────────────────────────────────
+    if (output && output !== "(no output)") {
+        text += `────────────────────\n`;
+        text += output + "\n";
+    }
+
+    // ── Status footer ───────────────────────────────────
+    text += `────────────────────\n`;
+    text += `╭─ ${exitIcon} ${code}`;
+    text += ` ⋄ ⏱ ${elapsedStr}`;
+    text += ` ⋄ 🕐 ${time}`;
+    if (killed) text += ` ⋄ ⚠️ TIMEOUT`;
+    text += "\n";
+    text += `╰─ ${displayPath} $`;
+
+    return text;
 }
 
 export default {
@@ -207,13 +309,16 @@ export default {
         // ── Validate input ──────────────────────────────────────────
         if (!rawArgs || !rawArgs.trim()) {
             return message.reply(
-                "```[bash] Terminal VPS via WhatsApp\n\n" +
-                "Penggunaan:\n" +
-                "  $ ls -la          — jalankan command\n" +
-                "  $ cd /etc && ls   — stateful (cwd tersimpan)\n" +
-                "  $ reset           — reset session (terminal baru)\n\n" +
-                "Session bersifat persistent,\n" +
-                "cd/export/alias tetap tersimpan.```"
+                "╭━━━〔 🖥 Terminal VPS 〕━━━\n" +
+                "┃ Shell bash via WhatsApp\n" +
+                "┃ Session stateful (cd/export)\n" +
+                "╰━━━━━━━━━━━━━━━━━━━━\n\n" +
+                "╭───「 📖 Penggunaan 」\n" +
+                "│ ⋄ $ ls -la\n" +
+                "│ ⋄ $ cd /etc && ls\n" +
+                "│ ⋄ $ export FOO=bar\n" +
+                "│ ⋄ $ reset\n" +
+                "╰──────────────"
             );
         }
 
@@ -223,17 +328,18 @@ export default {
         if (command.toLowerCase() === "reset") {
             const hadSession = sessions.has(sender);
             destroySession(sender);
-            return message.reply(
-                hadSession
-                    ? "```🔄 Session bash direset.\nSession baru akan dibuat otomatis.```"
-                    : "```ℹ️ Tidak ada session aktif.```"
-            );
+
+            const text = hadSession
+                ? "╭─ 🔄 Session direset\n╰─ Session baru dibuat otomatis"
+                : "╭─ ℹ️ Tidak ada session aktif\n╰─ Kirim command untuk memulai";
+
+            return message.reply("```" + text + "```");
         }
 
         // ── Send initial message (will be edited later) ─────────────
         const sentMsg = await sock.sendMessage(
             message.chat,
-            { text: `\`\`\`⏳ $ ${command}\`\`\`` },
+            { text: "```╭─ ⏳ Executing...\n╰─ $ " + command + "```" },
             { quoted: message }
         );
 
@@ -242,7 +348,7 @@ export default {
 
         if (session.busy) {
             await sock.sendMessage(message.chat, {
-                text: "```⚠️ Command sebelumnya masih berjalan.\nTunggu selesai atau kirim: $ reset```",
+                text: "```╭─ ⚠️ Sedang menjalankan command\n╰─ Tunggu atau kirim: $ reset```",
                 edit: sentMsg.key,
             });
             return;
@@ -255,30 +361,34 @@ export default {
             result = await executeInSession(session, command);
         } catch (err) {
             await sock.sendMessage(message.chat, {
-                text: `\`\`\`❌ Gagal eksekusi: ${err.message}\nCoba: $ reset\`\`\``,
+                text: "```╭─ ❌ Gagal: " + err.message + "\n╰─ Coba: $ reset```",
                 edit: sentMsg.key,
             });
             return;
         }
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+        const elapsed = Date.now() - startTime;
 
         // ── Build output ────────────────────────────────────────────
         let output = stripAnsi(result.output).trim();
         if (!output) output = "(no output)";
 
-        let header = `$ ${command}\n`;
-        header += "─".repeat(Math.min(command.length + 2, 30)) + "\n";
+        // Calculate max body size for truncation
+        const overhead = 200; // estimated header+footer length
+        const body = truncate(output, MAX_OUTPUT_LENGTH - overhead);
 
-        let footer = "\n" + "─".repeat(30) + "\n";
-        footer += `exit: ${result.code} | ${elapsed}s`;
-        if (result.killed) footer += " | ⚠️ TIMEOUT";
-
-        const maxBodyLen = MAX_OUTPUT_LENGTH - header.length - footer.length - 10;
-        const body = truncate(output, maxBodyLen);
+        const formatted = formatOutput({
+            command,
+            output: body,
+            code: result.code,
+            elapsed,
+            cwd: result.cwd || "~",
+            user: result.user || "root",
+            killed: result.killed,
+        });
 
         // ── Edit message with result ────────────────────────────────
         await sock.sendMessage(message.chat, {
-            text: "```" + header + body + footer + "```",
+            text: "```" + formatted + "```",
             edit: sentMsg.key,
         });
     },
