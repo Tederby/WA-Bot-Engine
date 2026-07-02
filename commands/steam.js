@@ -71,7 +71,7 @@ export default {
     usage: "!steam <judul game>",
     async handler({ message, args, sock, sender }) {
         if (args.length === 0) {
-            await message.reply("❌ Berikan judul game yang ingin dicari.\nContoh: `!steam stardew valley`\n\n💡 *Tip:* Tambahkan `-1` atau `--top` untuk langsung mendapatkan hasil paling relevan.");
+            await message.reply("❌ Berikan judul game yang ingin dicari.\nContoh: `!steam stardew valley`\n\n💡 *Tip:* Tambahkan `-1` atau `--top` untuk langsung mendapatkan hasil paling relevan.\n💡 _Cari profil user? Gunakan `!steamprofile <username>`_");
             return;
         }
 

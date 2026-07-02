@@ -26,6 +26,11 @@ const setting = {
         purgeOnStartup: true,
     },
 
+    // ── Steam ────────────────────────────────────────────────────────────
+    steam: {
+        apiKey: process.env.STEAM_API_KEY || "",
+    },
+
     // ── Spam Filter ─────────────────────────────────────────────────────
     spamDelay: Number(process.env.SPAM_DELAY) || 5000, // ms cooldown per chat
 };
