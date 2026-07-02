@@ -105,6 +105,19 @@ function getCountryFlag(code) {
 }
 
 /**
+ * Extract custom URL from the player's profileurl field.
+ * Steam returns profileurl like:
+ *   "https://steamcommunity.com/id/gabelogannewell/"
+ *   "https://steamcommunity.com/profiles/76561197960287930/"
+ * Returns the custom vanity name or null if using numeric ID.
+ */
+function extractCustomUrl(profileUrl) {
+    if (!profileUrl) return null;
+    const match = profileUrl.match(/steamcommunity\.com\/id\/([^/]+)/i);
+    return match ? match[1] : null;
+}
+
+/**
  * Build the profile text output.
  */
 function buildProfileText(steamId, player, games, recent, level) {
@@ -113,11 +126,17 @@ function buildProfileText(steamId, player, games, recent, level) {
     const realName = player.realname || null;
     const country = player.loccountrycode || null;
     const created = player.timecreated ? new Date(player.timecreated * 1000) : null;
+    const customUrl = extractCustomUrl(player.profileurl);
 
     let text = `╭━━━〔 🎮 STEAM PROFILE 〕━━━\n`;
     text += `┃ 👤 *Nama*     : ${name}\n`;
     if (realName) text += `┃ 📛 *Nama Asli* : ${realName}\n`;
     text += `┃ 🆔 *SteamID*  : \`${steamId}\`\n`;
+    if (customUrl) {
+        text += `┃ 🏷️ *Custom ID* : ${customUrl}\n`;
+    } else {
+        text += `┃ 🏷️ *Custom ID* : _Belum diatur_\n`;
+    }
     text += `┃ 🌐 *Status*   : ${getStatusText(player)}\n`;
     if (country) text += `┃ 🏳️ *Negara*   : ${getCountryFlag(country)} ${country}\n`;
     if (created) {
@@ -178,7 +197,12 @@ function buildProfileText(steamId, player, games, recent, level) {
         text += `\n_Tidak ada aktivitas dalam 2 minggu terakhir._\n`;
     }
 
-    // ── Permanent link (always use ID-based URL) ──
+    // ── Custom URL tip ──
+    if (!customUrl) {
+        text += `\n💡 _Ini profil kamu? Setup custom URL di:_\n_Steam > Edit Profile > Custom URL_\n`;
+    }
+
+    // ── Permanent link (always use ID-based URL, placed last for link preview) ──
     text += `\n🔗 *Profil:* https://steamcommunity.com/profiles/${steamId}`;
 
     return text.trim();
@@ -215,6 +239,13 @@ export default {
 
         const input = args.join("").trim();
 
+        // ── Send loading message (will be edited later) ──
+        const sentMsg = await sock.sendMessage(
+            message.chat,
+            { text: `🔍 Mengambil profil *${input}*...` },
+            { quoted: message }
+        );
+
         try {
             // ── Step 1: Resolve to SteamID64 ──
             let steamId;
@@ -223,39 +254,37 @@ export default {
             if (inputType === "steamid") {
                 steamId = input;
             } else {
-                await message.reply(`🔍 Mencari profil *${input}*...`);
                 steamId = await resolveVanityURL(apiKey, input);
 
                 if (!steamId) {
-                    await message.reply(
-                        `❌ User Steam dengan custom URL *${input}* tidak ditemukan.\n\n` +
-                        `⚠️ Pencarian harus *exact match* — pastikan:\n` +
-                        `• Bukan display name, tapi *custom URL* dari profil\n` +
-                        `• Cek di: \`steamcommunity.com/id/\`*username_disini*\n` +
-                        `• Atau gunakan *SteamID64* (angka 17 digit)\n\n` +
-                        `💡 _Jika user tidak punya custom URL, gunakan SteamID64 dari profil mereka._`
-                    );
+                    await sock.sendMessage(message.chat, {
+                        text: `❌ User Steam dengan custom URL *${input}* tidak ditemukan.\n\n` +
+                            `⚠️ Pencarian harus *exact match* — pastikan:\n` +
+                            `• Bukan display name, tapi *custom URL* dari profil\n` +
+                            `• Cek di: \`steamcommunity.com/id/\`*username_disini*\n` +
+                            `• Atau gunakan *SteamID64* (angka 17 digit)\n\n` +
+                            `💡 _Jika user tidak punya custom URL, gunakan SteamID64 dari profil mereka._`,
+                        edit: sentMsg.key
+                    });
                     return;
                 }
             }
 
             // ── Step 2: Fetch all data in parallel ──
-            if (inputType === "steamid") {
-                await message.reply(`🔍 Mengambil profil *${steamId}*...`);
-            }
-
             const profileData = await fetchProfileData(apiKey, steamId);
 
             // ── Step 3: Validate player exists ──
             const players = profileData.summary?.response?.players;
             if (!players || players.length === 0) {
-                await message.reply(`❌ Profil Steam dengan ID *${steamId}* tidak ditemukan.`);
+                await sock.sendMessage(message.chat, {
+                    text: `❌ Profil Steam dengan ID *${steamId}* tidak ditemukan.`,
+                    edit: sentMsg.key
+                });
                 return;
             }
 
             const player = players[0];
             const steamLevel = profileData.level?.response?.player_level ?? null;
-            const avatarUrl = player.avatarfull || player.avatarmedium || player.avatar;
 
             // ── Step 4: Build output ──
             const profileText = buildProfileText(
@@ -266,28 +295,30 @@ export default {
                 steamLevel
             );
 
-            // ── Step 5: Send with avatar ──
-            if (avatarUrl) {
-                await sock.sendMessage(
-                    message.chat,
-                    {
-                        image: { url: avatarUrl },
-                        caption: profileText
-                    },
-                    { quoted: message }
-                );
-            } else {
-                await message.reply(profileText);
-            }
+            // ── Step 5: Edit loading → collapsed indicator ──
+            await sock.sendMessage(message.chat, {
+                text: `>> *${player.personaname}*`,
+                edit: sentMsg.key
+            });
+
+            // ── Step 6: Send result as new message (enables link preview) ──
+            await sock.sendMessage(
+                message.chat,
+                { text: profileText },
+                { quoted: message }
+            );
 
         } catch (err) {
             console.error("SteamProfile Error:", err.message);
 
-            if (err.response?.status === 403) {
-                await message.reply("❌ Steam API Key tidak valid atau expired. Hubungi owner bot.");
-            } else {
-                await message.reply("❌ Terjadi kesalahan saat mengambil profil Steam. Coba lagi nanti.");
-            }
+            const errText = err.response?.status === 403
+                ? "❌ Steam API Key tidak valid atau expired. Hubungi owner bot."
+                : "❌ Terjadi kesalahan saat mengambil profil Steam. Coba lagi nanti.";
+
+            await sock.sendMessage(message.chat, {
+                text: errText,
+                edit: sentMsg.key
+            }).catch(() => {});
         }
     }
 };
