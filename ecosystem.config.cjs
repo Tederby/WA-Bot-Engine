@@ -27,8 +27,8 @@ module.exports = {
         OWNER_NUMBER: "6287825136146",
         PREFIXES: "!.#/-",
         SPAM_DELAY: "5000",
-        YOUTUBE_API_KEY: "AIzaSyBmxyaTTIx3UcWVCtfWcUo5aiYU5rpZbwA",
-        STEAM_API_KEY: "7E8E49CEB8E075DA9366ED4C698018CD",
+        // YOUTUBE_API_KEY: " ",  If use different API
+        // STEAM_API_KEY: " ",
       },
     },
     {
