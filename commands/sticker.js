@@ -13,7 +13,7 @@ export default {
             // Check original message media
             let isMedia = false;
             let isQuotedMedia = false;
-            
+
             if (message.message?.imageMessage || message.message?.videoMessage) {
                 isMedia = true;
             }
@@ -40,7 +40,7 @@ export default {
             }
 
             const textArgs = (rawArgs || '').trim();
-            
+
             // Di WhatsApp, Author ditampilkan di atas (kiri), Pack di bawah (kanan).
             // User ingin "Bot Name - User Name" -> Author: Bot Name, Pack: User Name
             let authorName = setting.name || 'Bot Stiker';
@@ -58,7 +58,7 @@ export default {
                     packName = pushname || 'WhatsApp User';
                 }
             } else {
-                replyMsg += `\n\n💡 *Tips*: Kamu bisa menambahkan watermark dengan perintah \`${prefix}s NamaPack|NamaAuthor\` (contoh: \`${prefix}s Tederby|Anime\`)`;
+                replyMsg += `\n\n💡 *Tips*: Kamu bisa menambahkan watermark dengan perintah \`${prefix}s NamaAuthor|NamaPack\` (contoh: \`${prefix}s Tederby|Anime\`)`;
             }
 
             await message.reply(replyMsg);
