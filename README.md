@@ -79,6 +79,22 @@ pm2 start ecosystem.config.cjs --only bot2
 pm2 logs bot2    # Scan QR
 ```
 
+### Pairing Code (No QR)
+
+If your VPS doesn't support viewing QR codes or your phone camera is broken, you can login using a phone number:
+
+
+Set the `PAIRING_NUMBER` variable in `ecosystem.config.cjs`:
+```javascript
+env: {
+  BOT_ID: "bot2",
+  // ...
+  PAIRING_NUMBER: "6281234567890", // Start with country code
+}
+```
+Run `pm2 restart bot2`, and view `pm2 logs bot2` to see the 8-digit Pairing Code. Enter it on your phone via *Linked Devices* > *Link with phone number instead*.
+
+
 ---
 
 ## 📂 Project Structure
