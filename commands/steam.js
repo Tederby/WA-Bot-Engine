@@ -1,14 +1,8 @@
 import axios from "axios";
 import { registerReplyHandler, deleteReplyHandler } from "./_registry.js";
+import { formatRupiah, sendSteamGameDetail } from "../services/steam.js";
 
 const ITEMS_PER_PAGE = 5;
-
-function formatRupiah(cents) {
-    if (!cents) return "Rp 0";
-    const price = Math.floor(cents / 100);
-    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(price);
-}
-
 function generatePaginator(page, totalPages) {
     if (totalPages <= 1) return `[ 📄 Page 1/1 ] ─── ━━━━━━━━━━━━━━━━`;
     let items = [];
@@ -111,7 +105,7 @@ export default {
             }
 
             if (isDirect || results.length === 1) {
-                await sendSteamDetail(results[0].id, message, sock);
+                await sendSteamGameDetail(results[0].id, message, sock);
                 return;
             }
 
@@ -164,105 +158,7 @@ async function replyHandler({ message, sock, state }) {
         deleteReplyHandler(messageKey.id);
         await sock.sendMessage(message.chat, { text: `>> *${app.name}*`, edit: messageKey });
 
-        await sendSteamDetail(app.id, message, sock);
+        await sendSteamGameDetail(app.id, message, sock);
         return;
-    }
-}
-
-async function sendSteamDetail(appId, message, sock) {
-    try {
-        const detailUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}&cc=ID&l=indonesian`;
-        const response = await axios.get(detailUrl, { timeout: 15000 });
-
-        const data = response.data[appId];
-        if (!data || !data.success) {
-            await message.reply(`❌ Gagal mengambil detail untuk game tersebut.`);
-            return;
-        }
-
-        const game = data.data;
-        const name = game.name || "N/A";
-        const shortDesc = game.short_description ? game.short_description.replace(/<[^>]*>?/gm, '') : "Tidak ada deskripsi.";
-        const releaseDate = game.release_date ? game.release_date.date : "N/A";
-        const developers = game.developers ? game.developers.join(", ") : "N/A";
-        const publishers = game.publishers ? game.publishers.join(", ") : "N/A";
-        const metacritic = game.metacritic ? game.metacritic.score : "N/A";
-        let supportedLanguages = "N/A";
-        if (game.supported_languages) {
-            let rawLangs = game.supported_languages.replace(/<br[^>]*>[\s\S]*$/i, '');
-            rawLangs = rawLangs.replace(/<strong>\*<\/strong>\s*bahasa dengan dukungan audio penuh/gi, '');
-            rawLangs = rawLangs.replace(/\*bahasa dengan dukungan audio penuh/gi, '');
-            rawLangs = rawLangs.replace(/\*languages with full audio support/gi, '');
-
-            const audioLangs = [];
-            const textLangs = [];
-
-            rawLangs.split(',').forEach(l => {
-                let text = l.trim();
-                let hasAudio = text.includes('<strong>*</strong>') || text.includes('*');
-                text = text.replace(/<[^>]*>?/gm, '').replace(/\*/g, '').trim();
-
-                if (text) {
-                    if (hasAudio) audioLangs.push(text);
-                    else textLangs.push(text);
-                }
-            });
-
-            let formatArr = [];
-            if (audioLangs.length > 0) {
-                formatArr.push(`🔊 *UI, Audio & Subtitle:*\n${audioLangs.join(', ')}`);
-            }
-            if (textLangs.length > 0) {
-                formatArr.push(`💬 *UI & Subtitle:*\n${textLangs.join(', ')}`);
-            }
-
-            supportedLanguages = formatArr.join('\n\n');
-        }
-
-        let priceText = "Gratis";
-        if (game.is_free) {
-            priceText = "Gratis (Free to Play)";
-        } else if (game.price_overview) {
-            const p = game.price_overview;
-            if (p.discount_percent > 0) {
-                const fullPrice = p.initial_formatted || formatRupiah(p.initial);
-                const discountedPrice = p.final_formatted || formatRupiah(p.final);
-                priceText = `~${fullPrice}~\n💸 *Harga Diskon:* ${discountedPrice}\n📉 *Diskon:* ${p.discount_percent}%`;
-            } else {
-                priceText = p.final_formatted || formatRupiah(p.final);
-            }
-        } else {
-            priceText = "Tidak tersedia untuk dibeli";
-        }
-
-        const genres = game.genres ? game.genres.map(g => g.description).join(", ") : "N/A";
-        const headerImage = game.header_image || game.capsule_image;
-
-        let captionText = `🎮 *${name}*\n\n`;
-        captionText += `🔗 *Link Steam:* https://store.steampowered.com/app/${appId}\n\n`;
-        captionText += `🏷️ *Genre:* ${genres}\n`;
-        captionText += `📅 *Rilis:* ${releaseDate}\n`;
-        captionText += `🛠️ *Developer:* ${developers}\n`;
-        captionText += `🏢 *Publisher:* ${publishers}\n`;
-        captionText += `🌟 *Metacritic:* ${metacritic}\n\n`;
-        captionText += `💰 *Harga:* ${priceText}\n\n`;
-        captionText += `📝 *Deskripsi:*\n${shortDesc}\n\n`;
-        captionText += `🌐 *Bahasa didukung:*\n${supportedLanguages}`;
-
-        if (headerImage) {
-            await sock.sendMessage(
-                message.chat,
-                {
-                    image: { url: headerImage },
-                    caption: captionText
-                },
-                { quoted: message }
-            );
-        } else {
-            await message.reply(captionText);
-        }
-    } catch (err) {
-        console.error("Steam Detail Error:", err.message);
-        await message.reply(`❌ Terjadi kesalahan saat mengambil detail game.`);
     }
 }
