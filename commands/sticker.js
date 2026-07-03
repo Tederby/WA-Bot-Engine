@@ -8,7 +8,7 @@ export default {
     category: 'media',
     description: 'Membuat stiker dari gambar atau video pendek',
     usage: '!s (send/reply to an image or short video) atau !s Pack|Author',
-    async handler({ message, sock, rawArgs, prefix }) {
+    async handler({ message, sock, rawArgs, prefix, pushname }) {
         try {
             // Check original message media
             let isMedia = false;
@@ -40,18 +40,22 @@ export default {
             }
 
             const textArgs = (rawArgs || '').trim();
-            let packName = setting.name || 'Bot Stiker';
-            let authorName = 'WhatsApp Bot';
+            
+            // Di WhatsApp, Author ditampilkan di atas (kiri), Pack di bawah (kanan).
+            // User ingin "Bot Name - User Name" -> Author: Bot Name, Pack: User Name
+            let authorName = setting.name || 'Bot Stiker';
+            let packName = pushname || 'WhatsApp User';
 
             let replyMsg = '⏳ Sedang membuat stiker...';
 
             if (textArgs) {
                 const splitArgs = textArgs.split('|');
-                packName = splitArgs[0].trim();
+                // User input: Tederby|Anime (Tederby sebagai Author, Anime sebagai Pack)
+                authorName = splitArgs[0].trim();
                 if (splitArgs.length > 1) {
-                    authorName = splitArgs[1].trim();
+                    packName = splitArgs[1].trim();
                 } else {
-                    authorName = 'WhatsApp Bot';
+                    packName = pushname || 'WhatsApp User';
                 }
             } else {
                 replyMsg += `\n\n💡 *Tips*: Kamu bisa menambahkan watermark dengan perintah \`${prefix}s NamaPack|NamaAuthor\` (contoh: \`${prefix}s Tederby|Anime\`)`;
