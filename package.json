@@ -3,7 +3,10 @@
   "description": "Simple Whatsapp Bot Base, using library Baileys",
   "version": "1.0.0",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "migrate": "node scripts/migrate_json_to_sqlite.js",
+    "pm2": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs"
   },
   "license": "MIT",
   "type": "module",
@@ -11,6 +14,7 @@
     "any-ascii": "^0.3.2",
     "axios": "^1.13.1",
     "baileys": "^7.0.0-rc.9",
+    "better-sqlite3": "^12.11.1",
     "chalk": "^4.1.2",
     "chokidar": "^4.0.3",
     "dotenv": "^17.2.1",

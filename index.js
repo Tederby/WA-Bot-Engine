@@ -28,6 +28,7 @@ import { initCleanup } from "./services/cleanup.js";
 import { initReminders } from "./services/reminder.js";
 import { reloadCommand, initCommands, commandsDir } from "./commands/_registry.js";
 import { handleGroupParticipantsUpdate } from "./lib/events/group-participants.js";
+import setting from "./setting.js";
 
 // ── Initialize command registry (must happen after all static imports settle) ─
 await initCommands();
@@ -41,6 +42,17 @@ initCleanup();
 // ── Baileys logger ──────────────────────────────────────────────────────────
 const logger = Pino({ level: "silent" });
 
+// ── Bot Instance Identity ───────────────────────────────────────────────────
+const BOT_ID = setting.botId;
+const TAG = `[${BOT_ID}]`;
+
+// ── Per-Bot Paths ───────────────────────────────────────────────────────────
+const SESSION_DIR = `./sessions/session_${BOT_ID}`;
+const CYCLE_FILE = `./sessions/cycle_${BOT_ID}.json`;
+
+// Ensure sessions directory exists
+if (!fs.existsSync("./sessions")) fs.mkdirSync("./sessions", { recursive: true });
+
 // ── Connection State ────────────────────────────────────────────────────────
 
 let currentSock = null;          // Referensi socket aktif (untuk graceful shutdown)
@@ -51,7 +63,6 @@ let isSuspended = false;         // Flag agar tidak reconnect setelah suspend
 const MAX_RECONNECT_ATTEMPTS = 5;
 const MAX_QR_ATTEMPTS = 5;
 
-const CYCLE_FILE = "./cycle_count.json";
 let cycleCount = 0;
 
 try {
@@ -91,8 +102,8 @@ function getBackoffDelay(attempt, isHard) {
  */
 function suspendProgram(reason) {
   isSuspended = true;
-  console.log(`session | 🛑 SUSPENDED: ${reason}`);
-  console.log("session | Untuk melanjutkan, jalankan: pm2 restart wa-bot");
+  console.log(`${TAG} | 🛑 SUSPENDED: ${reason}`);
+  console.log(`${TAG} | Untuk melanjutkan, jalankan: pm2 restart ${BOT_ID}`);
   setInterval(() => {}, 1000 * 60 * 60);
 }
 
@@ -101,11 +112,11 @@ function suspendProgram(reason) {
 // Ini MENCEGAH false loggedOut saat PM2 restart.
 
 async function gracefulShutdown(signal) {
-  console.log(`session | Received ${signal}, shutting down gracefully...`);
+  console.log(`${TAG} | Received ${signal}, shutting down gracefully...`);
   if (currentSock) {
     try {
       currentSock.end();
-      console.log("session | WebSocket closed cleanly.");
+      console.log(`${TAG} | WebSocket closed cleanly.`);
     } catch (e) {
       // Abaikan error saat cleanup
     }
@@ -120,7 +131,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 async function connectToWhatsApp() {
   if (isSuspended) return;
 
-  const { state, saveCreds } = await useMultiFileAuthState("./session");
+  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
@@ -182,10 +193,10 @@ function handleConnectionUpdate(update, sock) {
     if (qrCount >= MAX_QR_ATTEMPTS) {
       return suspendProgram(
         `QR code sudah di-generate ${qrCount}x tanpa di-scan. ` +
-        `Jalankan 'pm2 restart wa-bot' untuk mencoba lagi.`
+        `Jalankan 'pm2 restart ${BOT_ID}' untuk mencoba lagi.`
       );
     }
-    console.log(`session | QR Code (${qrCount}/${MAX_QR_ATTEMPTS}):`);
+    console.log(`${TAG} | QR Code (${qrCount}/${MAX_QR_ATTEMPTS}):`);
     qrcode.generate(update.qr, { small: true }, (qr) => console.log(qr));
   }
 
@@ -194,10 +205,10 @@ function handleConnectionUpdate(update, sock) {
     const reason = Object.entries(DisconnectReason)
       .find((i) => i[1] === status)?.[0] || "unknown";
 
-    console.log(`session | Closed connection, status: ${reason} (${status})`);
+    console.log(`${TAG} | Closed connection, status: ${reason} (${status})`);
 
     if (lastDisconnect?.error) {
-      console.error("session | Error details:", lastDisconnect.error?.message || lastDisconnect.error);
+      console.error(`${TAG} | Error details:`, lastDisconnect.error?.message || lastDisconnect.error);
     }
 
     // Error berat: loggedOut, multideviceMismatch, 401, 403
@@ -218,19 +229,19 @@ function handleConnectionUpdate(update, sock) {
         if (cycleCount >= MAX_CYCLES) {
           // Sudah gagal total (MAX_RECONNECT_ATTEMPTS × MAX_CYCLES kali).
           // Hapus session dan suspend — butuh scan QR baru.
-          console.log(`session | Gagal total ${MAX_RECONNECT_ATTEMPTS * MAX_CYCLES}x (${MAX_CYCLES} siklus). Menghapus folder session...`);
+          console.log(`${TAG} | Gagal total ${MAX_RECONNECT_ATTEMPTS * MAX_CYCLES}x (${MAX_CYCLES} siklus). Menghapus folder session...`);
           try {
-            if (fs.existsSync("./session")) {
-              fs.rmSync("./session", { recursive: true, force: true });
-              console.log("session | Folder session berhasil dihapus.");
+            if (fs.existsSync(SESSION_DIR)) {
+              fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+              console.log(`${TAG} | Folder session berhasil dihapus.`);
             }
           } catch (err) {
-            console.error("session | Gagal menghapus folder session:", err.message);
+            console.error(`${TAG} | Gagal menghapus folder session:`, err.message);
           }
           saveCycleCount(0);
           return suspendProgram(
             "Session dihapus karena gagal reconnect berulang kali. " +
-            "Jalankan 'pm2 restart wa-bot' untuk scan QR baru."
+            `Jalankan 'pm2 restart ${BOT_ID}' untuk scan QR baru.`
           );
         }
 
@@ -239,14 +250,14 @@ function handleConnectionUpdate(update, sock) {
         return suspendProgram(
           `Sesi gagal setelah ${MAX_RECONNECT_ATTEMPTS} percobaan ` +
           `(siklus ${cycleCount}/${MAX_CYCLES}). ` +
-          `Jalankan 'pm2 restart wa-bot' untuk melanjutkan ke siklus berikutnya.`
+          `Jalankan 'pm2 restart ${BOT_ID}' untuk melanjutkan ke siklus berikutnya.`
         );
       }
 
       // Masih ada sisa retry — coba lagi dengan exponential backoff
       const delay = getBackoffDelay(reconnectAttempts, true);
       console.log(
-        `session | Sesi terputus (${reason}). ` +
+        `${TAG} | Sesi terputus (${reason}). ` +
         `Mencoba reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) ` +
         `siklus ${cycleCount + 1}/${MAX_CYCLES} dalam ${delay / 1000}s...`
       );
@@ -257,14 +268,14 @@ function handleConnectionUpdate(update, sock) {
       // Biasanya bisa langsung retry.
       reconnectAttempts++;
       const delay = getBackoffDelay(reconnectAttempts, false);
-      console.log(`session | Mencoba reconnect dalam ${delay / 1000}s... (attempt ${reconnectAttempts})`);
+      console.log(`${TAG} | Mencoba reconnect dalam ${delay / 1000}s... (attempt ${reconnectAttempts})`);
 
       // Safety net: jika error ringan terus-menerus, jangan infinite loop
       if (reconnectAttempts >= 10) {
         reconnectAttempts = 0;
         return suspendProgram(
           "Error ringan terjadi 10x berturut-turut. " +
-          "Kemungkinan ada masalah network VPS. Jalankan 'pm2 restart wa-bot' untuk retry."
+          `Kemungkinan ada masalah network VPS. Jalankan 'pm2 restart ${BOT_ID}' untuk retry.`
         );
       }
       setTimeout(connectToWhatsApp, delay);
@@ -279,7 +290,7 @@ function handleConnectionUpdate(update, sock) {
       cycleCount = 0;
       saveCycleCount(0);
     }
-    console.log(`session | ✅ Connected: ${jidDecode(sock?.user?.id)?.user}`);
+    console.log(`${TAG} | ✅ Connected: ${jidDecode(sock?.user?.id)?.user}`);
   }
 }
 

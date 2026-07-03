@@ -2,7 +2,8 @@ import fs from "fs";
 import path from "path";
 import { color } from "../lib/utils.js";
 
-const DB_PATH = path.resolve("./database_reminders.json");
+const BOT_ID = process.env.BOT_ID || "default";
+const DB_PATH = path.resolve(`./database_reminders_${BOT_ID}.json`);
 let reminders = [];
 let timers = new Map(); // key: userId_chatId, value: setTimeout ID
 let globalSock = null;

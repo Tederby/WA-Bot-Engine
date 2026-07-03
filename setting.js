@@ -1,14 +1,15 @@
 import 'dotenv/config';
 
 const setting = {
-    // ── Bot Identity ────────────────────────────────────────────────────
+    // ── Bot Instance Identity ───────────────────────────────────────────
+    botId: process.env.BOT_ID || "default",
     name: process.env.BOT_NAME || "Tederby18",
     owner: (process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || "6287825136146").split(",").map(v => v.trim()),
     prefixes: (process.env.PREFIXES || "!.#/-").split(""),
 
     // ── yt-dlp ──────────────────────────────────────────────────────────
     ytdlp: {
-        tempDir: "./temp",
+        tempDir: `./temp/${process.env.BOT_ID || "default"}`,
         maxFileSize: 64 * 1024 * 1024,           // 64MB (WhatsApp video limit)
         maxFileSizeDoc: 2 * 1024 * 1024 * 1024,   // 2GB (WhatsApp doc limit)
         stateExpiry: 15 * 60 * 1000,              // 15 menit
