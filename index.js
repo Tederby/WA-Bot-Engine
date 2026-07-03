@@ -28,6 +28,7 @@ import { initCleanup } from "./services/cleanup.js";
 import { initReminders } from "./services/reminder.js";
 import { reloadCommand, initCommands, commandsDir } from "./commands/_registry.js";
 import { handleGroupParticipantsUpdate } from "./lib/events/group-participants.js";
+import { upsertBotRegistry } from "./lib/database.js";
 import setting from "./setting.js";
 
 // ── Initialize command registry (must happen after all static imports settle) ─
@@ -56,6 +57,7 @@ if (!fs.existsSync("./sessions")) fs.mkdirSync("./sessions", { recursive: true }
 // ── Connection State ────────────────────────────────────────────────────────
 
 let currentSock = null;          // Referensi socket aktif (untuk graceful shutdown)
+let registryInterval = null;     // Auto-Discovery Heartbeat
 let reconnectAttempts = 0;       // Retry counter per siklus
 let qrCount = 0;                 // Berapa kali QR di-generate tanpa di-scan
 let isSuspended = false;         // Flag agar tidak reconnect setelah suspend
@@ -290,7 +292,16 @@ function handleConnectionUpdate(update, sock) {
       cycleCount = 0;
       saveCycleCount(0);
     }
+    
     console.log(`${TAG} | ✅ Connected: ${jidDecode(sock?.user?.id)?.user}`);
+    
+    // ── Auto-Discovery Heartbeat ─────────────────────────────
+    if (registryInterval) clearInterval(registryInterval);
+    const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+    upsertBotRegistry(BOT_ID, myJid);
+    registryInterval = setInterval(() => {
+        upsertBotRegistry(BOT_ID, myJid);
+    }, 60000);
   }
 }
 

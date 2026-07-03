@@ -14,6 +14,7 @@ import path from "path";
 import setting from "../setting.js";
 import { cleanupExpiredReplyHandlers } from "../commands/_registry.js";
 import { purgeExpired as purgeInfoCache } from "./infoCache.js";
+import { purgeOldClaims } from "../lib/database.js";
 import { color } from "../lib/utils.js";
 
 let initialized = false;
@@ -44,6 +45,7 @@ export function initCleanup() {
         let filesPurged = cleanupTempFiles(tempDir, cfg.fileExpiry);
         let statesPurged = cleanupExpiredReplyHandlers(cfg.stateExpiry);
         let cachePurged = purgeInfoCache();
+        purgeOldClaims(5 * 60 * 1000); // 5 mins
 
         if (filesPurged + statesPurged + cachePurged > 0) {
             console.log(

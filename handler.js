@@ -14,7 +14,7 @@ import { buildContext } from "./lib/contextBuilder.js";
 import { runAutoDetects } from "./lib/autoDetect.js";
 import { logger } from "./lib/logger.js";
 import { checkPermissions } from "./lib/middleware.js";
-import { isBanned, isGroupBanned } from "./lib/database.js";
+import { isBanned, isGroupBanned, getActiveBotsInGroup, claimMessage } from "./lib/database.js";
 import setting from "./setting.js";
 
 let msgHandler = async (upsert, sock, message) => {
@@ -26,6 +26,10 @@ let msgHandler = async (upsert, sock, message) => {
         if (message.sender === "") return;
 
         const t = message.messageTimestamp;
+
+        // ── Ignore offline replay (prevent double processing) ───────
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (nowSec - t > 120) return;
 
         // ── Build context ───────────────────────────────────────────
         const ctx = await buildContext(message, sock);
@@ -40,6 +44,25 @@ let msgHandler = async (upsert, sock, message) => {
         if (ctx.isGroup) {
             const listBlocked = await sock.fetchBlocklist();
             if (listBlocked.includes(ctx.sender)) return;
+            
+            // ── Multi-Bot Priority Claim ────────────────────────────
+            const botId = process.env.BOT_ID || setting.botId || "bot";
+            const participantJids = ctx.groupMetadata.participants.map(p => p.id);
+            const activeBots = getActiveBotsInGroup(participantJids);
+            
+            const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+            const myIndex = activeBots.indexOf(myJid);
+            
+            if (myIndex > 0) {
+                // Delay 1.5s per priority level (index 0 = 0s)
+                await new Promise(resolve => setTimeout(resolve, myIndex * 1500));
+            }
+            
+            const stanzaId = message.key.id;
+            const claimed = claimMessage(stanzaId, botId);
+            if (!claimed) {
+                return; // Diambil alih oleh bot lain dengan prioritas lebih tinggi
+            }
         }
 
         // ── 1. Command Parsing ──────────────────────────────────────
