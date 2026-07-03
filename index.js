@@ -61,6 +61,7 @@ let registryInterval = null;     // Auto-Discovery Heartbeat
 let reconnectAttempts = 0;       // Retry counter per siklus
 let qrCount = 0;                 // Berapa kali QR di-generate tanpa di-scan
 let isSuspended = false;         // Flag agar tidak reconnect setelah suspend
+let pairingCodeRequested = false; // Mencegah request berulang
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const MAX_QR_ATTEMPTS = 5;
@@ -152,20 +153,6 @@ async function connectToWhatsApp() {
 
   currentSock = sock;
 
-  // ── Pairing Code Request ──────────────────────────────────────────────────
-  if (!sock.authState.creds.registered && setting.pairingNumber) {
-    setTimeout(async () => {
-      try {
-        const code = await sock.requestPairingCode(setting.pairingNumber);
-        console.log(`\n======================================================`);
-        console.log(`${TAG} | 📱 PAIRING CODE: ${code}`);
-        console.log(`======================================================\n`);
-      } catch (err) {
-        console.error(`${TAG} | ❌ Gagal meminta Pairing Code:`, err.message);
-      }
-    }, 3000);
-  }
-
   initReminders(sock);
 
   sock.ev.process(async (ev) => {
@@ -203,17 +190,36 @@ function handleConnectionUpdate(update, sock) {
   const { connection, lastDisconnect } = update;
   const status = lastDisconnect?.error?.output?.statusCode;
 
-  // ── QR Code ─────────────────────────────────────────────────
+  // ── QR Code / Pairing Code ──────────────────────────────────
   if (update.qr) {
-    qrCount++;
-    if (qrCount >= MAX_QR_ATTEMPTS) {
-      return suspendProgram(
-        `QR code sudah di-generate ${qrCount}x tanpa di-scan. ` +
-        `Jalankan 'pm2 restart ${BOT_ID}' untuk mencoba lagi.`
-      );
+    if (setting.pairingNumber && !pairingCodeRequested) {
+      pairingCodeRequested = true;
+      (async () => {
+        try {
+          // Normalisasi nomor
+          let number = setting.pairingNumber.replace(/[^0-9]/g, "");
+          if (number.startsWith("08")) number = "628" + number.slice(2);
+          else if (number.startsWith("8")) number = "628" + number.slice(1);
+          
+          const code = await sock.requestPairingCode(number);
+          console.log(`\n======================================================`);
+          console.log(`${TAG} | 📱 PAIRING CODE: ${code}`);
+          console.log(`======================================================\n`);
+        } catch (err) {
+          console.error(`${TAG} | ❌ Gagal meminta Pairing Code:`, err.message);
+        }
+      })();
+    } else if (!setting.pairingNumber) {
+      qrCount++;
+      if (qrCount >= MAX_QR_ATTEMPTS) {
+        return suspendProgram(
+          `QR code sudah di-generate ${qrCount}x tanpa di-scan. ` +
+          `Jalankan 'pm2 restart ${BOT_ID}' untuk mencoba lagi.`
+        );
+      }
+      console.log(`${TAG} | QR Code (${qrCount}/${MAX_QR_ATTEMPTS}):`);
+      qrcode.generate(update.qr, { small: true }, (qr) => console.log(qr));
     }
-    console.log(`${TAG} | QR Code (${qrCount}/${MAX_QR_ATTEMPTS}):`);
-    qrcode.generate(update.qr, { small: true }, (qr) => console.log(qr));
   }
 
   // ── Connection Close ────────────────────────────────────────
@@ -302,6 +308,7 @@ function handleConnectionUpdate(update, sock) {
     // Reset semua counter karena berhasil connect
     reconnectAttempts = 0;
     qrCount = 0;
+    pairingCodeRequested = false;
     if (cycleCount > 0) {
       cycleCount = 0;
       saveCycleCount(0);
