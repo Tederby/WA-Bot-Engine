@@ -6,6 +6,7 @@ const setting = {
     name: process.env.BOT_NAME || "Tederby18",
     owner: (process.env.OWNER_NUMBERS || process.env.OWNER_NUMBER || "6287825136146").split(",").map(v => v.trim()),
     prefixes: (process.env.PREFIXES || "!.#/-").split(""),
+    pairingNumber: process.env.PAIRING_NUMBER || "",
 
     // ── yt-dlp ──────────────────────────────────────────────────────────
     ytdlp: {

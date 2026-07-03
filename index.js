@@ -152,6 +152,20 @@ async function connectToWhatsApp() {
 
   currentSock = sock;
 
+  // ── Pairing Code Request ──────────────────────────────────────────────────
+  if (!sock.authState.creds.registered && setting.pairingNumber) {
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(setting.pairingNumber);
+        console.log(`\n======================================================`);
+        console.log(`${TAG} | 📱 PAIRING CODE: ${code}`);
+        console.log(`======================================================\n`);
+      } catch (err) {
+        console.error(`${TAG} | ❌ Gagal meminta Pairing Code:`, err.message);
+      }
+    }, 3000);
+  }
+
   initReminders(sock);
 
   sock.ev.process(async (ev) => {

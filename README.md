@@ -79,6 +79,28 @@ pm2 start ecosystem.config.cjs --only bot2
 pm2 logs bot2    # Scan QR
 ```
 
+### Pairing Code (No QR)
+
+If your VPS doesn't support viewing QR codes or your phone camera is broken, you can login using a phone number:
+
+**Method 1: via PM2**
+Set the `PAIRING_NUMBER` variable in `ecosystem.config.cjs`:
+```javascript
+env: {
+  BOT_ID: "bot2",
+  // ...
+  PAIRING_NUMBER: "6281234567890", // Start with country code
+}
+```
+Run `pm2 restart bot2`, and view `pm2 logs bot2` to see the 8-digit Pairing Code. Enter it on your phone via *Linked Devices* > *Link with phone number instead*.
+
+**Method 2: via Chat Command (`!addbot`)**
+If you already have a working bot, you can add new instances dynamically directly from WhatsApp!
+1. Send `!addbot 6281234567890` to your active bot.
+2. The bot will reply with an 8-digit Pairing Code.
+3. Enter the code on the target phone.
+4. Add the new entry to `ecosystem.config.cjs` and restart PM2.
+
 ---
 
 ## 📂 Project Structure
