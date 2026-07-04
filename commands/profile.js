@@ -86,9 +86,9 @@ export default {
             const roles = [];
             if (isTargetOwner) roles.push("👑 System Owner");
             else if (isTargetBotAdmin) roles.push("🛡️ Bot Admin");
-            
+
             if (isTargetAdmin) roles.push("👮 Group Admin");
-            
+
             if (roles.length === 0) roles.push("👤 Member");
 
             caption += `┃ 🏷️ User  : @${targetBaseId}\n`;
@@ -131,7 +131,7 @@ export default {
             caption += `╰──────────────`;
 
             // ── 6. Send ─────────────────────────────────────────────
-            const placeholderImageUrl = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png";
+            const placeholderImageUrl = "https://i.imgur.com/ckO9GJN.png";
             let pfpSource = { url: placeholderImageUrl };
             let isDefault = true;
 
