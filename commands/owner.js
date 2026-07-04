@@ -15,34 +15,45 @@ export default {
         text += `╰━━━━━━━━━━━━━━━━━━━━\n\n`;
 
         setting.owner.forEach((num, index) => {
-            text += `╭───「 👤 Owner ${index + 1} 」\n`;
+            text += `╭───「 👤 Owner ${setting.owner.length > 1 ? index + 1 : ""} 」\n`;
             text += `│ ⋄ WhatsApp : wa.me/${num}\n`;
             text += `│ ⋄ Mention  : @${num}\n`;
             text += `╰──────────────\n\n`;
         });
 
-        const botAdmins = getAllBotAdmins();
-        const adminMentions = [];
+        // Clean up "Owner  " to "Owner " if there's only 1 owner
+        text = text.replace(/Owner  /g, "Owner ");
 
-        if (botAdmins.length > 0) {
-            text += `╭━━━〔 🛡️ Bot Admins 〕━━━\n`;
-            text += `┃ Admin yang bertugas moderasi bot.\n`;
-            text += `╰━━━━━━━━━━━━━━━━━━━━\n\n`;
+        const rawAdmins = getAllBotAdmins();
+        const adminMentions = [];
+        let adminText = "";
+
+        // Deduplicate and normalize admins (WhatsApp can have both plain numbers and @s.whatsapp.net, and @lid)
+        const uniqueAdmins = new Set();
+        rawAdmins.forEach(jid => {
+            let normalized = jidNormalizedUser(jid);
+            if (!normalized.includes("@")) {
+                normalized += "@s.whatsapp.net"; // Fallback for bare numbers
+            }
+            uniqueAdmins.add(normalized);
+        });
+
+        if (uniqueAdmins.size > 0) {
+            adminText += `╭━━━〔 🛡️ Bot Admins 〕━━━\n`;
+            adminText += `┃ Admin yang bertugas moderasi bot.\n`;
             
-            botAdmins.forEach((jid, index) => {
+            let adminIndex = 1;
+            uniqueAdmins.forEach((jid) => {
                 const num = jid.split("@")[0];
-                const normalized = jidNormalizedUser(jid);
-                if (!adminMentions.includes(normalized)) {
-                    adminMentions.push(normalized);
-                }
+                adminMentions.push(jid);
                 
-                text += `╭───「 🛡️ Admin ${index + 1} 」\n`;
-                text += `│ ⋄ WhatsApp : wa.me/${num}\n`;
-                text += `│ ⋄ Mention  : @${num}\n`;
-                text += `╰──────────────\n\n`;
+                adminText += `┃ ⋄ Admin ${adminIndex}  : @${num}\n`;
+                adminIndex++;
             });
+            adminText += `╰━━━━━━━━━━━━━━━━━━━━\n\n`;
         }
 
+        text += adminText;
         text = text.trim();
         
         // Remove duplicates between owner and admins just in case
