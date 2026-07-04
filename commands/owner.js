@@ -32,6 +32,8 @@ export default {
         const uniqueAdmins = new Set();
         rawAdmins.forEach(jid => {
             let normalized = jidNormalizedUser(jid);
+            if (!normalized) normalized = jid; // If jidNormalizedUser fails on bare numbers
+            
             if (!normalized.includes("@")) {
                 normalized += "@s.whatsapp.net"; // Fallback for bare numbers
             }
