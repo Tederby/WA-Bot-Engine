@@ -47,8 +47,16 @@ export default {
 
             caption += `╭━━━〔 ⚙️ Menu Pengaturan 〕━━━\n`;
             caption += `┃ Balas pesan ini dengan:\n`;
-            caption += `┃ ⋄ \`name <nama baru>\` untuk mengganti nama yang ter-register\n`;
-            caption += `┃ ⋄ \`unreg\` untuk menghapus registrasi\n`;
+            caption += `┃\n`;
+            caption += `┃ ⚙️ *Akun*\n`;
+            caption += `┃ ⋄ \`name <nama baru>\` ganti nama\n`;
+            caption += `┃ ⋄ \`unreg\` hapus registrasi\n`;
+            caption += `┃\n`;
+            caption += `┃ 🔗 *Link Akun*\n`;
+            caption += `┃ ⋄ \`mal <username>\` tautkan MAL\n`;
+            caption += `┃ ⋄ \`steam <custom_url/steamid>\` tautkan Steam\n`;
+            caption += `┃ ⋄ \`unlink mal\` lepas MAL\n`;
+            caption += `┃ ⋄ \`unlink steam\` lepas Steam\n`;
             caption += `╰━━━━━━━━━━━━━━━━━━━━`;
 
             const sentMsg = await sock.sendMessage(message.chat, { text: caption }, { quoted: message });
@@ -97,6 +105,70 @@ async function replyHandler({ message, sock, state }) {
         
         await sock.sendMessage(message.chat, { text: `>> *Unregistering*`, edit: messageKey });
         await message.reply(`✅ Registrasi kamu telah dihapus dari database bot.`);
+        return;
+    }
+
+    // ── Account Linking: MAL ────────────────────────────────────────
+    if (cmd === "mal") {
+        const username = args.slice(1).join(" ").trim();
+        if (!username) {
+            await message.reply("❌ Berikan username MAL.\nContoh: `mal Tederby`");
+            return;
+        }
+
+        const user = getUser(userId);
+        user.meta = user.meta || {};
+        user.meta.malUsername = username;
+        saveUser(userId, user);
+
+        deleteReplyHandler(messageKey.id);
+        await sock.sendMessage(message.chat, { text: `>> *Linking MAL*`, edit: messageKey });
+        await message.reply(`✅ Akun MAL berhasil ditautkan: *${username}*`);
+        return;
+    }
+
+    // ── Account Linking: Steam ──────────────────────────────────────
+    if (cmd === "steam") {
+        const steamId = args.slice(1).join("").trim();
+        if (!steamId) {
+            await message.reply("❌ Berikan custom URL atau SteamID64.\nContoh: `steam gabelogannewell`");
+            return;
+        }
+
+        const user = getUser(userId);
+        user.meta = user.meta || {};
+        user.meta.steamId = steamId;
+        saveUser(userId, user);
+
+        deleteReplyHandler(messageKey.id);
+        await sock.sendMessage(message.chat, { text: `>> *Linking Steam*`, edit: messageKey });
+        await message.reply(`✅ Akun Steam berhasil ditautkan: *${steamId}*`);
+        return;
+    }
+
+    // ── Unlink Accounts ─────────────────────────────────────────────
+    if (cmd === "unlink") {
+        const service = (args[1] || "").toLowerCase();
+        if (service !== "mal" && service !== "steam") {
+            await message.reply("❌ Pilih akun yang ingin dilepas: `unlink mal` atau `unlink steam`");
+            return;
+        }
+
+        const user = getUser(userId);
+        user.meta = user.meta || {};
+
+        const metaKey = service === "mal" ? "malUsername" : "steamId";
+        if (!user.meta[metaKey]) {
+            await message.reply(`❌ Tidak ada akun ${service.toUpperCase()} yang tertaut.`);
+            return;
+        }
+
+        delete user.meta[metaKey];
+        saveUser(userId, user);
+
+        deleteReplyHandler(messageKey.id);
+        await sock.sendMessage(message.chat, { text: `>> *Unlinking ${service.toUpperCase()}*`, edit: messageKey });
+        await message.reply(`✅ Tautan akun ${service.toUpperCase()} telah dilepas.`);
         return;
     }
 }

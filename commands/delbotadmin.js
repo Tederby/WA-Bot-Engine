@@ -1,5 +1,5 @@
 import { jidNormalizedUser } from "baileys";
-import { setBotAdmin } from "../lib/database.js";
+import { setBotAdmin, resolveUserId, resolveToLid } from "../lib/database.js";
 
 export default {
     name: "delbotadmin",
@@ -25,10 +25,14 @@ export default {
                 return message.reply(`Tag, reply, atau masukkan nomor user yang ingin dicabut jabatannya.\nContoh: \`${prefix}delbotadmin @user\``);
             }
 
-            const normalizedTarget = jidNormalizedUser(target);
+            // Resolve LID → PN untuk konsistensi
+            const normalizedTarget = resolveUserId(jidNormalizedUser(target));
             const targetBaseId = normalizedTarget.split("@")[0];
 
+            // Demote di kedua key (PN dan LID) untuk bersihkan data lama
             setBotAdmin(normalizedTarget, false);
+            const lidVariant = resolveToLid(normalizedTarget);
+            if (lidVariant) setBotAdmin(lidVariant, false);
 
             return sock.sendMessage(
                 message.chat,

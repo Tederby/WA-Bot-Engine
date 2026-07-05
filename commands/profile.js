@@ -3,7 +3,7 @@
  */
 
 import { jidNormalizedUser } from "baileys";
-import { getUser, isBanned, isUserGroupBanned } from "../lib/database.js";
+import { getUser, isBanned, isUserGroupBanned, resolveUserId, isBotAdmin, resolveToLid } from "../lib/database.js";
 import setting from "../setting.js";
 import fs from "fs";
 import path from "path";
@@ -34,8 +34,9 @@ export default {
                 return message.reply("Gagal mendapatkan target pengguna. Pastikan tag atau reply pesan dengan benar.");
             }
 
-            const normalizedTarget = jidNormalizedUser(target);
-            const targetBaseId = target.split(":")[0].split("@")[0];
+            // Resolve LID → PN agar database lookup menemukan data yang benar
+            const normalizedTarget = resolveUserId(jidNormalizedUser(target));
+            const targetBaseId = normalizedTarget.split(":")[0].split("@")[0];
 
             // ── 2. Owner check ──────────────────────────────────────
             const botBaseId = sock.user.id.split(":")[0].split("@")[0];
@@ -44,15 +45,19 @@ export default {
                 ownerNumbers.includes(normalizedTarget) ||
                 targetBaseId === botBaseId;
 
-            // ── 3. Admin check (group only) ─────────────────────────
+            // ── 3. Admin check (group only, LID-aware) ──────────────
             let isTargetAdmin = false;
             if (isGroup) {
-                if (target === sender) {
+                if (normalizedTarget === sender) {
                     isTargetAdmin = isGroupAdmins;
                 } else if (groupMetadata && groupMetadata.participants) {
                     isTargetAdmin = groupMetadata.participants.some(p => {
                         const pBase = p.id.split(":")[0].split("@")[0];
-                        return pBase === targetBaseId && p.admin;
+                        // Juga cek phoneNumber untuk grup LID mode
+                        const pPhoneBase = p.phoneNumber
+                            ? p.phoneNumber.split(":")[0].split("@")[0]
+                            : null;
+                        return (pBase === targetBaseId || pPhoneBase === targetBaseId) && p.admin;
                     });
                 }
             }
@@ -81,7 +86,10 @@ export default {
                 caption += `┃ 📛 Nama  : -\n`;
             }
 
-            const isTargetBotAdmin = userData.meta?.isBotAdmin === true;
+            // Cek bot admin dari PN (resolved) DAN LID asli (untuk data lama)
+            const isTargetBotAdmin = 
+                userData.meta?.isBotAdmin === true ||
+                isBotAdmin(jidNormalizedUser(target));
 
             const roles = [];
             if (isTargetOwner) roles.push("👑 System Owner");
@@ -98,19 +106,36 @@ export default {
             // Registration status
             caption += `╭───「 📝 Registrasi 」\n`;
 
+            const isSelf = normalizedTarget === sender;
+
             if (userData.registered) {
                 caption += `│ ⋄ Status : ✅ Terdaftar\n`;
                 if (regDate) caption += `│ ⋄ Sejak  : ${regDate}\n`;
-                if (target === sender) {
+                if (isSelf) {
                     caption += `│   └ _Ketik \`${prefix}register\` untuk pengaturan_\n`;
                 }
             } else {
                 caption += `│ ⋄ Status : ❌ Belum terdaftar\n`;
-                if (target === sender) {
+                if (isSelf) {
                     caption += `│   └ _Ketik \`${prefix}register\` untuk mendaftar_\n`;
                 }
             }
             caption += `╰──────────────\n\n`;
+
+            // Linked accounts
+            const hasMal = !!userData.meta?.malUsername;
+            const hasSteam = !!userData.meta?.steamId;
+            if (hasMal || hasSteam) {
+                caption += `╭───「 🔗 Linked Accounts 」\n`;
+                if (hasMal) caption += `│ ⋄ MAL   : ${userData.meta.malUsername}\n`;
+                if (hasSteam) caption += `│ ⋄ Steam : ${userData.meta.steamId}\n`;
+                caption += `╰──────────────\n\n`;
+            } else if (isSelf) {
+                caption += `╭───「 🔗 Linked Accounts 」\n`;
+                caption += `│ _Belum ada akun tertaut_\n`;
+                caption += `│ └ _Ketik \`${prefix}register\` lalu link_\n`;
+                caption += `╰──────────────\n\n`;
+            }
 
             // Ban status
             caption += `╭───「 🚫 Status Ban 」\n`;

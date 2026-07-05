@@ -1,5 +1,5 @@
 import { jidNormalizedUser } from "baileys";
-import { setBotAdmin } from "../lib/database.js";
+import { setBotAdmin, resolveUserId } from "../lib/database.js";
 
 export default {
     name: "addbotadmin",
@@ -25,7 +25,8 @@ export default {
                 return message.reply(`Tag, reply, atau masukkan nomor user yang ingin diangkat menjadi Bot Admin.\nContoh: \`${prefix}addbotadmin @user\``);
             }
 
-            const normalizedTarget = jidNormalizedUser(target);
+            // Resolve LID → PN agar bot admin tersimpan dengan key PN yang konsisten
+            const normalizedTarget = resolveUserId(jidNormalizedUser(target));
             const targetBaseId = normalizedTarget.split("@")[0];
 
             setBotAdmin(normalizedTarget, true);

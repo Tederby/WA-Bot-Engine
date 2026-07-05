@@ -1,4 +1,5 @@
 import { sendSteamProfileDetail } from "../services/steam.js";
+import { getUser, resolveUserId } from "../lib/database.js";
 import setting from "../setting.js";
 
 export default {
@@ -7,8 +8,15 @@ export default {
     category: "search",
     description: "Mencari informasi profil user Steam",
     usage: "!steamprofile <username/steamid>",
-    async handler({ message, args, sock }) {
+    async handler({ message, args, sock, sender, prefix }) {
         if (args.length === 0) {
+            // Cek apakah user punya linked Steam account
+            const userData = getUser(resolveUserId(sender));
+            if (userData.meta?.steamId) {
+                await sendSteamProfileDetail(userData.meta.steamId, message, sock, false);
+                return;
+            }
+
             await message.reply(
                 "❌ Berikan *custom URL* atau *SteamID64* yang ingin dicari.\n\n" +
                 "Contoh:\n" +
@@ -19,7 +27,7 @@ export default {
                 "Buka profil Steam → lihat URL-nya:\n" +
                 "• `steamcommunity.com/id/`*gabelogannewell* ← ini custom URL\n" +
                 "• `steamcommunity.com/profiles/`*76561197960287930* ← ini SteamID64\n\n" +
-                "💡 _Cari game? Gunakan `!steam <judul game>`_"
+                `💡 _Tautkan akun Steam kamu via \`${prefix}register\` agar bisa cek profil tanpa argumen_`
             );
             return;
         }
