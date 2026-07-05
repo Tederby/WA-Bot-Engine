@@ -65,10 +65,11 @@ export default {
 
             // Download media natively using baileys
             const stream = await downloadContentFromMessage(mediaMessage, isVideo ? 'video' : 'image');
-            let buffer = Buffer.from([]);
+            const chunks = [];
             for await (const chunk of stream) {
-                buffer = Buffer.concat([buffer, chunk]);
+                chunks.push(chunk);
             }
+            const buffer = Buffer.concat(chunks);
 
             // Build sticker
             const sticker = new Sticker(buffer, {

@@ -4,7 +4,7 @@
 
 import os from "os";
 import { getAllCommands } from "./_registry.js";
-import { getDB } from "../lib/database.js";
+import { getDBStats } from "../lib/database.js";
 import setting from "../setting.js";
 
 /** Format bytes to human-readable. */
@@ -43,14 +43,9 @@ export default {
             const commands = getAllCommands();
             const categories = new Set(commands.map(c => c.category).filter(Boolean));
 
-            // ── Database stats ───────────────────────────────────────
-            const db = getDB();
-            const totalUsers = Object.keys(db.users || {}).length;
-            const registeredUsers = Object.values(db.users || {}).filter(u => u.registered).length;
-            const bannedUsers = Object.values(db.users || {}).filter(u => u.banned).length;
-            const totalGroups = Object.keys(db.groups || {}).length;
-            const registeredGroups = Object.values(db.groups || {}).filter(g => g.registered).length;
-            const bannedGroups = Object.values(db.groups || {}).filter(g => g.banned).length;
+            // ── Database stats (efficient COUNT queries) ─────────────
+            const stats = getDBStats();
+            const { totalUsers, registeredUsers, bannedUsers, totalGroups, registeredGroups, bannedGroups } = stats;
 
             // ── System info ──────────────────────────────────────────
             const memUsage = process.memoryUsage();

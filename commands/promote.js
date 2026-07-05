@@ -10,7 +10,7 @@ export default {
     adminOnly: true,
     botAdminRequired: true,
 
-    async handler({ message, sock, args, prefix }) {
+    async handler({ message, sock, args, prefix, groupMetadata }) {
         try {
             let target = null;
             if (message.mentionedJid && message.mentionedJid.length > 0) {
@@ -28,6 +28,23 @@ export default {
 
             const normalizedTarget = jidNormalizedUser(target);
             const targetBaseId = normalizedTarget.split("@")[0];
+
+            // Pre-check: is target already admin?
+            if (groupMetadata?.participants) {
+                const participant = groupMetadata.participants.find(p => 
+                    p.id.split(":")[0].split("@")[0] === targetBaseId
+                );
+                if (!participant) {
+                    return message.reply(`❌ @${targetBaseId} tidak ditemukan di grup ini.`);
+                }
+                if (participant.admin) {
+                    return sock.sendMessage(
+                        message.chat,
+                        { text: `⚠️ @${targetBaseId} sudah menjadi Admin Grup.`, mentions: [normalizedTarget] },
+                        { quoted: message }
+                    );
+                }
+            }
 
             await sock.groupParticipantsUpdate(message.chat, [normalizedTarget], "promote");
 

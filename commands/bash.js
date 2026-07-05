@@ -132,9 +132,22 @@ function executeInSession(session, command) {
         function cleanup() {
             session.proc.stdout.removeListener("data", onData);
             session.proc.stderr.removeListener("data", onStderr);
+            session.proc.removeListener("exit", onExit);
+        }
+
+        function onExit(exitCode) {
+            if (resolved) return;
+            resolved = true;
+            clearTimeout(timeout);
+            cleanup();
+            session.busy = false;
+            resolve({ output: output.trimEnd(), code: exitCode ?? 1, killed: false, cwd: "?", user: "?" });
         }
 
         function onData(chunk) {
+            // Guard: ignore data from dead processes
+            if (session.proc.exitCode !== null) return;
+            
             output += chunk.toString();
             const idx = output.indexOf(metaMarker);
             if (idx !== -1) {
@@ -179,6 +192,7 @@ function executeInSession(session, command) {
 
         session.proc.stdout.on("data", onData);
         session.proc.stderr.on("data", onStderr);
+        session.proc.on("exit", onExit);
 
         // Build the command sequence:
         // 1. Run user command (stderr → stdout)

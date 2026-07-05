@@ -10,7 +10,7 @@ export default {
     async handler({ message, sock }) {
         const targetMsg = message.quoted ? message.quoted : message;
         
-        const mediaTypes = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'];
+        const mediaTypes = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage', 'ptvMessage'];
         const messageObj = targetMsg.message || targetMsg;
         const msgKeys = Object.keys(messageObj || {});
         const type = msgKeys.find(key => mediaTypes.includes(key));
@@ -29,14 +29,17 @@ export default {
                 
                 let sendKey = "document";
                 if (type === "imageMessage") sendKey = "image";
-                else if (type === "videoMessage") sendKey = "video";
+                else if (type === "videoMessage" || type === "ptvMessage") sendKey = "video";
                 else if (type === "audioMessage") sendKey = "audio";
                 else if (type === "stickerMessage") sendKey = "sticker";
                 
                 const sendOptions = { [sendKey]: buffer };
                 const originalMediaMessage = messageObj[type];
 
-                if (type === "audioMessage") {
+                if (type === "ptvMessage") {
+                    sendOptions.mimetype = originalMediaMessage.mimetype || "video/mp4";
+                    sendOptions.ptv = true;
+                } else if (type === "audioMessage") {
                     sendOptions.mimetype = originalMediaMessage.mimetype || "audio/mp4";
                     if (originalMediaMessage.ptt) sendOptions.ptt = true;
                 } else if (type === "documentMessage") {
