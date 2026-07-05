@@ -17,6 +17,24 @@ import { checkPermissions } from "./lib/middleware.js";
 import { isBanned, isGroupBanned, getActiveBotsInGroup, claimMessage } from "./lib/database.js";
 import setting from "./setting.js";
 
+// ── Blocklist Cache (avoid network call per-message) ────────────────────────
+let _blocklistCache = [];
+let _blocklistTimestamp = 0;
+const BLOCKLIST_TTL = 60_000; // 60 seconds
+
+async function getCachedBlocklist(sock) {
+    const now = Date.now();
+    if (now - _blocklistTimestamp > BLOCKLIST_TTL) {
+        try {
+            _blocklistCache = await sock.fetchBlocklist();
+            _blocklistTimestamp = now;
+        } catch {
+            // Connection not ready or network error — use stale cache
+        }
+    }
+    return _blocklistCache;
+}
+
 let msgHandler = async (upsert, sock, message) => {
     try {
         let { text } = message;
@@ -42,26 +60,30 @@ let msgHandler = async (upsert, sock, message) => {
 
         // ── Block check (group only) ────────────────────────────────
         if (ctx.isGroup) {
-            const listBlocked = await sock.fetchBlocklist();
+            const listBlocked = await getCachedBlocklist(sock);
             if (listBlocked.includes(ctx.sender)) return;
             
             // ── Multi-Bot Priority Claim ────────────────────────────
             const botId = process.env.BOT_ID || setting.botId || "bot";
-            const participantJids = ctx.groupMetadata.participants.map(p => p.id);
-            const activeBots = getActiveBotsInGroup(participantJids);
+            const participants = ctx.groupMetadata?.participants;
             
-            const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
-            const myIndex = activeBots.indexOf(myJid);
-            
-            if (myIndex > 0) {
-                // Delay 1.5s per priority level (index 0 = 0s)
-                await new Promise(resolve => setTimeout(resolve, myIndex * 1500));
-            }
-            
-            const stanzaId = message.key.id;
-            const claimed = claimMessage(stanzaId, botId);
-            if (!claimed) {
-                return; // Diambil alih oleh bot lain dengan prioritas lebih tinggi
+            if (participants && participants.length > 0) {
+                const participantJids = participants.map(p => p.id);
+                const activeBots = getActiveBotsInGroup(participantJids);
+                
+                const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+                const myIndex = activeBots.indexOf(myJid);
+                
+                if (myIndex > 0) {
+                    // Delay 1.5s per priority level (index 0 = 0s)
+                    await new Promise(resolve => setTimeout(resolve, myIndex * 1500));
+                }
+                
+                const stanzaId = message.key.id;
+                const claimed = claimMessage(stanzaId, botId);
+                if (!claimed) {
+                    return; // Diambil alih oleh bot lain dengan prioritas lebih tinggi
+                }
             }
         }
 

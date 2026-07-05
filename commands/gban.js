@@ -217,7 +217,7 @@ export default {
                 `• \`${prefix}gbanlist\` — Lihat daftar\n\n` +
                 `━━ Grup ━━\n` +
                 `• \`${prefix}bangrup [groupId]\` — Ban grup\n` +
-                `• \`${prefix}unbangrup <groupId]\` — Unban grup\n` +
+                `• \`${prefix}unbangrup <groupId>\` — Unban grup\n` +
                 `• \`${prefix}bangruplist\` — Lihat daftar`
             );
 

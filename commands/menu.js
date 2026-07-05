@@ -10,6 +10,8 @@ const CATEGORY_LABELS = {
     anime: "🌸 Anime",
     search: "🔍 Search",
     tools: "🛠️ Tools",
+    botadmin: "🛡️ Bot Admin",
+    system: "💻 System",
     owner: "👑 Owner"
 };
 
@@ -206,17 +208,17 @@ async function replyHandler({ message, sock, state }) {
         return;
     }
 
-    clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
     
     deleteReplyHandler(messageKey.id);
 
     await sock.sendMessage(message.chat, { text: newMenuText, edit: messageKey });
 
-    setTimeout(async () => {
+    const newTimeoutId = setTimeout(async () => {
         try {
             await sock.sendMessage(message.chat, { text: "❌ *Command timeout*", edit: messageKey });
         } catch (err) {
-            console.error("[MENU] Gagal edit timeout:", err.message);
+            // Message too old or already edited — ignore
         }
     }, 60000);
 }

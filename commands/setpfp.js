@@ -40,26 +40,47 @@ export default {
 
             let buffer = null;
 
-            // Check if user replied to an image or sent an image with caption
-            let isMedia = false;
-            let isQuotedMedia = false;
-            
-            if (message.message?.imageMessage) {
-                isMedia = true;
-            }
-            if (message.quoted?.message?.imageMessage) {
-                isQuotedMedia = true;
-            }
+            // ── Detect media using normalized message type ──────────
+            // message.type = the WAMessage key (e.g. "imageMessage")
+            // This works correctly even for ephemeral/viewOnce messages
+            // because Messages.js unwraps them before setting m.type.
+            const isMedia = message.type === "imageMessage";
+            const isQuotedMedia = !!(
+                message.quoted?.message?.imageMessage ||
+                // Handle nested types in quoted messages
+                (message.quoted?.mtype && (
+                    message.quoted.mtype === "image/jpeg" ||
+                    message.quoted.mtype === "image/png" ||
+                    message.quoted.mtype === "image/webp" ||
+                    message.quoted.mtype === "imageMessage"
+                ))
+            );
 
-            const targetMsg = isQuotedMedia ? message.quoted : (isMedia ? message : null);
-
-            if (targetMsg && targetMsg.message?.imageMessage) {
+            if (isQuotedMedia && message.quoted?.message) {
                 await message.reply("⏳ Sedang mengunduh dan memproses gambar...");
-                const stream = await downloadContentFromMessage(targetMsg.message.imageMessage, 'image');
-                buffer = Buffer.from([]);
-                for await (const chunk of stream) {
-                    buffer = Buffer.concat([buffer, chunk]);
+
+                // Find the imageMessage inside the quoted message
+                const quotedMsg = message.quoted.message;
+                const imgMsg = quotedMsg.imageMessage
+                    || quotedMsg.viewOnceMessageV2?.message?.imageMessage
+                    || quotedMsg.ephemeralMessage?.message?.imageMessage;
+
+                if (imgMsg) {
+                    const stream = await downloadContentFromMessage(imgMsg, 'image');
+                    const chunks = [];
+                    for await (const chunk of stream) {
+                        chunks.push(chunk);
+                    }
+                    buffer = Buffer.concat(chunks);
                 }
+            } else if (isMedia && message.message?.imageMessage) {
+                await message.reply("⏳ Sedang mengunduh dan memproses gambar...");
+                const stream = await downloadContentFromMessage(message.message.imageMessage, 'image');
+                const chunks = [];
+                for await (const chunk of stream) {
+                    chunks.push(chunk);
+                }
+                buffer = Buffer.concat(chunks);
             } else if (args[0] && args[0].startsWith("http")) {
                 await message.reply("⏳ Sedang mengambil dan memproses gambar dari link...");
                 try {
@@ -99,7 +120,14 @@ export default {
             const filename = `${senderBaseId}.jpg`;
             const filepath = path.join(pfpDir, filename);
 
-            await image.write(filepath);
+            // Use getBuffer for Jimp v1+ compatibility, fallback to write()
+            try {
+                const outBuffer = await image.getBuffer("image/jpeg");
+                fs.writeFileSync(filepath, outBuffer);
+            } catch {
+                // Fallback for legacy Jimp versions
+                await image.write(filepath);
+            }
 
             // Update database
             setPfp(normalizedSender, filename);
