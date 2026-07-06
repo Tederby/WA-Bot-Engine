@@ -75,21 +75,64 @@ export default {
     aliases: ["reg", "daftar", "registrasi"],
     category: "general",
     description: "Mendaftarkan diri ke database bot dan mengatur profil.",
-    usage: "!register [mal/steam] [value]",
+    usage: "!register [name/unreg/mal/steam/unlink] [value]",
 
     async handler({ message, args, sender, pushname, prefix, sock }) {
         try {
             // Safety net: pastikan sender selalu PN, bukan LID
             sender = resolveUserId(sender);
 
+            // ── Direct sub-commands (tanpa harus reply menu) ────────
             if (args && args.length > 0) {
                 const cmd = args[0].toLowerCase();
+
+                // !register mal <username> / !register steam <id>
                 if (cmd === "mal" || cmd === "steam") {
                     await processDirectLinking(cmd, args.slice(1).join(" ").trim(), sender, pushname, message, sock);
                     return;
                 }
+
+                // !register name <nama baru>
+                if (cmd === "name") {
+                    const newName = args.slice(1).join(" ").trim();
+                    if (!newName) {
+                        return message.reply(`❌ Berikan nama baru.\nContoh: \`${prefix}register name Tederby\``);
+                    }
+                    if (!isRegistered(sender)) registerUser(sender, pushname);
+                    const user = getUser(sender);
+                    user.name = newName;
+                    saveUser(sender, user);
+                    return message.reply(`✅ Nama kamu berhasil diubah menjadi *${newName}*.`);
+                }
+
+                // !register unreg
+                if (cmd === "unreg" || cmd === "unregister") {
+                    if (!isRegistered(sender)) {
+                        return message.reply("❌ Kamu belum terdaftar.");
+                    }
+                    unregisterUser(sender);
+                    return message.reply("✅ Registrasi kamu telah dihapus dari database bot.");
+                }
+
+                // !register unlink mal / !register unlink steam
+                if (cmd === "unlink") {
+                    const service = (args[1] || "").toLowerCase();
+                    if (service !== "mal" && service !== "steam") {
+                        return message.reply(`❌ Pilih akun yang ingin dilepas:\n• \`${prefix}register unlink mal\`\n• \`${prefix}register unlink steam\``);
+                    }
+                    const user = getUser(sender);
+                    user.meta = user.meta || {};
+                    const metaKey = service === "mal" ? "malUsername" : "steamId";
+                    if (!user.meta[metaKey]) {
+                        return message.reply(`❌ Tidak ada akun ${service.toUpperCase()} yang tertaut.`);
+                    }
+                    delete user.meta[metaKey];
+                    saveUser(sender, user);
+                    return message.reply(`✅ Tautan akun ${service.toUpperCase()} telah dilepas.`);
+                }
             }
 
+            // ── No sub-command: tampilkan info + menu ───────────────
             let user;
             let isNewUser = false;
 
@@ -119,7 +162,7 @@ export default {
             caption += `╰━━━━━━━━━━━━━━━━━━━━\n\n`;
 
             caption += `╭━━━〔 ⚙️ Menu Pengaturan 〕━━━\n`;
-            caption += `┃ Balas pesan ini dengan:\n`;
+            caption += `┃ Balas pesan ini, atau gunakan langsung:\n`;
             caption += `┃\n`;
             caption += `┃ ⚙️ *Akun*\n`;
             caption += `┃ ⋄ \`name <nama baru>\` ganti nama\n`;
@@ -130,6 +173,9 @@ export default {
             caption += `┃ ⋄ \`steam <custom_url/steamid>\` tautkan Steam\n`;
             caption += `┃ ⋄ \`unlink mal\` lepas MAL\n`;
             caption += `┃ ⋄ \`unlink steam\` lepas Steam\n`;
+            caption += `┃\n`;
+            caption += `┃ 💡 _Bisa juga langsung:_\n`;
+            caption += "┃ _`" + prefix + "register name Tederby`_\n";
             caption += `╰━━━━━━━━━━━━━━━━━━━━`;
 
             const sentMsg = await sock.sendMessage(message.chat, { text: caption }, { quoted: message });
