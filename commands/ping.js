@@ -6,6 +6,6 @@ export default {
     usage: "!ping",
     async handler({ message }) {
         const t = message.messageTimestamp;
-        await message.reply(`Pong! 🏓\n\nSpeed: ${Date.now() - t * 0} ms`);
+        await message.reply(`Pong! 🏓\n\nSpeed: ${Date.now() - t * 1000} ms`);
     }
 };
