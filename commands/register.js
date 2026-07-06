@@ -90,6 +90,9 @@ export default {
                 }
             }
 
+            let user;
+            let isNewUser = false;
+
             if (!isRegistered(sender)) {
                 user = registerUser(sender, pushname);
                 isNewUser = true;
