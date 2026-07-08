@@ -29,6 +29,8 @@ export default {
             const normalizedTarget = jidNormalizedUser(target);
             const targetBaseId = normalizedTarget.split("@")[0];
 
+            let actualTargetJid = normalizedTarget;
+
             // Pre-check: is target already admin?
             if (groupMetadata?.participants) {
                 const participant = groupMetadata.participants.find(p => 
@@ -37,6 +39,9 @@ export default {
                 if (!participant) {
                     return message.reply(`❌ @${targetBaseId} tidak ditemukan di grup ini.`);
                 }
+                
+                actualTargetJid = participant.id;
+
                 if (participant.admin) {
                     return sock.sendMessage(
                         message.chat,
@@ -46,7 +51,7 @@ export default {
                 }
             }
 
-            await sock.groupParticipantsUpdate(message.chat, [normalizedTarget], "promote");
+            await sock.groupParticipantsUpdate(message.chat, [actualTargetJid], "promote");
 
             return sock.sendMessage(
                 message.chat,
