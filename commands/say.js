@@ -23,10 +23,17 @@ export default {
             outText = "\u200B" + outText;
         }
 
-        // Parsing manual tag angka (jika user mengetik @628123456789 manual tanpa UI WhatsApp)
-        const manualMentions = [...outText.matchAll(/@(\d{10,16})/g)].map(v => v[1] + '@s.whatsapp.net');
+        // Ambil ID (tanpa domain) dari mentions bawaan (bisa berupa PN atau LID)
+        const existingMentionIds = mentions.map(jid => jid.split('@')[0]);
+
+        // Parsing manual tag angka (hanya jika user mengetik manual dan tidak ada di mentionedJid)
+        const manualMentions = [...outText.matchAll(/@(\d{10,16})/g)]
+            .map(v => v[1])
+            .filter(num => !existingMentionIds.includes(num)) // Mencegah bentrok dengan LID mode
+            .map(num => num + '@s.whatsapp.net');
+            
         if (manualMentions.length > 0) {
-            mentions = [...new Set([...mentions, ...manualMentions])];
+            mentions = [...mentions, ...manualMentions];
         }
 
         // Cari URL di dalam teks
