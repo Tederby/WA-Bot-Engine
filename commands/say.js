@@ -7,22 +7,31 @@ export default {
     async handler({ message, rawArgs, sock }) {
         if (!rawArgs) return message.reply("Masukkan teks!");
         
+        let outText = rawArgs;
+        
+        // Mencegah loop eksekusi jika user iseng memasukkan command bot (misal: !say !menu)
+        // Dengan menyisipkan karakter tidak terlihat (Zero-Width Space) di awal
+        const prefixes = ["!", ".", "#", "/", "-", "$"];
+        if (prefixes.includes(outText[0])) {
+            outText = "\u200B" + outText;
+        }
+
         // Cari URL di dalam teks
         const urlRegex = /(https?:\/\/[^\s]+)/g;
-        const match = rawArgs.match(urlRegex);
+        const match = outText.match(urlRegex);
         
         if (match && match.length > 0) {
             // Jika ada link, gunakan matchedText agar Baileys men-generate preview
             await sock.sendMessage(
                 message.chat,
                 { 
-                    text: rawArgs,
+                    text: outText,
                     matchedText: match[0] 
                 },
                 { quoted: message }
             );
         } else {
-            await message.reply(rawArgs);
+            await message.reply(outText);
         }
     }
 };
