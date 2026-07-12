@@ -1,10 +1,9 @@
 {
-  "name": "simple-wa-bot",
-  "description": "Simple Whatsapp Bot Base, using library Baileys",
+  "name": "wa-bot-engine",
+  "description": "Multi-instance WhatsApp bot engine built on Baileys. Drop-in commands, hot-reload, and PM2 multi-bot support.",
   "version": "1.0.0",
   "scripts": {
     "start": "node index.js",
-    "migrate": "node scripts/migrate_json_to_sqlite.js",
     "pm2": "pm2 start ecosystem.config.cjs",
     "pm2:stop": "pm2 stop ecosystem.config.cjs"
   },
@@ -18,11 +17,8 @@
     "chalk": "^4.1.2",
     "chokidar": "^4.0.3",
     "dotenv": "^17.2.1",
-    "jimp": "^1.6.1",
-    "link-preview-js": "^3.0.14",
-    "moment-timezone": "^0.5.45",
-    "qrcode-terminal": "^0.12.0",
-    "wa-sticker-formatter": "^4.4.4"
+    "pino": "^9.2.0",
+    "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
     "eslint": "^8.22.0"

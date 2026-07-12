@@ -2,18 +2,16 @@
  * Cleanup Service
  *
  * Handles periodic purging of:
- *  - Temporary download files older than `fileExpiry`
+ *  - Temporary files older than `fileExpiry`
  *  - Expired reply-handler state entries
- *  - Expired info-cache entries
- *
- * Also performs a full temp purge on startup when configured.
+ *  - Expired multi-bot message claims
+ *  - Periodic VACUUM to reclaim SQLite disk space
  */
 
 import fs from "fs";
 import path from "path";
 import setting from "../setting.js";
 import { cleanupExpiredReplyHandlers } from "../commands/_registry.js";
-import { purgeExpired as purgeInfoCache } from "./infoCache.js";
 import { purgeOldClaims } from "../lib/database.js";
 import db from "../lib/db.js";
 import { color } from "../lib/utils.js";
@@ -28,8 +26,7 @@ export function initCleanup() {
     if (initialized) return;
     initialized = true;
 
-    const cfg = setting.ytdlp;
-    const tempDir = path.resolve(cfg.tempDir);
+    const tempDir = path.resolve(setting.tempDir);
 
     // Ensure temp directory exists
     if (!fs.existsSync(tempDir)) {
@@ -37,24 +34,21 @@ export function initCleanup() {
     }
 
     // Purge all temp files on startup
-    if (cfg.purgeOnStartup) {
-        purgeAllTemp(tempDir);
-    }
+    purgeAllTemp(tempDir);
 
     // Periodic cleanup
     setInterval(() => {
-        let filesPurged = cleanupTempFiles(tempDir, cfg.fileExpiry);
-        let statesPurged = cleanupExpiredReplyHandlers(cfg.stateExpiry);
-        let cachePurged = purgeInfoCache();
+        let filesPurged = cleanupTempFiles(tempDir, setting.fileExpiry);
+        let statesPurged = cleanupExpiredReplyHandlers(15 * 60 * 1000); // 15 min expiry
         purgeOldClaims(5 * 60 * 1000); // 5 mins
 
-        if (filesPurged + statesPurged + cachePurged > 0) {
+        if (filesPurged + statesPurged > 0) {
             console.log(
                 color("[CLEANUP]", "yellow"),
-                `files: ${filesPurged}, states: ${statesPurged}, cache: ${cachePurged}`
+                `files: ${filesPurged}, states: ${statesPurged}`
             );
         }
-    }, cfg.cleanupInterval);
+    }, setting.cleanupInterval);
 
     console.log(color("[CLEANUP]", "yellow"), "Cleanup service initialized");
 

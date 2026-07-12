@@ -26,7 +26,6 @@ import Pino from "pino";
 import chokidar from "chokidar";
 import { Messages } from "./lib/Messages.js";
 import { initCleanup } from "./services/cleanup.js";
-import { initReminders } from "./services/reminder.js";
 import { reloadCommand, initCommands, commandsDir } from "./commands/_registry.js";
 import { handleGroupParticipantsUpdate } from "./lib/events/group-participants.js";
 import { upsertBotRegistry } from "./lib/database.js";
@@ -153,8 +152,6 @@ async function connectToWhatsApp() {
   });
 
   currentSock = sock;
-
-  initReminders(sock);
 
   sock.ev.process(async (ev) => {
     // ── Connection lifecycle ────────────────────────────────────

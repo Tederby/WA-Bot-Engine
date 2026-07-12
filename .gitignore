@@ -5,14 +5,7 @@ package-lock.json
 /temp/*
 !/temp/.gitkeep
 .env
-database/*
-database.json
 database.db
 database.db-wal
 database.db-shm
-database_reminders*.json
-database_feedbacks*.json
-database_reports*.json
 .agents/*
-cycle_count.json
-implementation.md
