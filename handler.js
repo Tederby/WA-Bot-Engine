@@ -53,8 +53,9 @@ let msgHandler = async (upsert, sock, message) => {
         const ctx = await buildContext(message, sock);
         if (!ctx.sender) return;
 
-        // ── Global ban checks (silent — no response) ────────────────
-        // Checked early to avoid wasting resources on banned entities.
+        // ── [OPTIONAL] Global ban checks (silent — no response) ─────
+        // Built-in ban system. Remove these two lines if you don't
+        // need user/group banning in your bot.
         if (ctx.isGroup && isGroupBanned(message.chat)) return;
         if (isBanned(ctx.sender)) return;
 
@@ -82,7 +83,7 @@ let msgHandler = async (upsert, sock, message) => {
                 const stanzaId = message.key.id;
                 const claimed = claimMessage(stanzaId, botId);
                 if (!claimed) {
-                    return; // Diambil alih oleh bot lain dengan prioritas lebih tinggi
+                    return; // Already claimed by a higher-priority bot
                 }
             }
         }
@@ -98,7 +99,7 @@ let msgHandler = async (upsert, sock, message) => {
             const entry = getReplyHandler(message.contextInfo.stanzaId);
             if (entry) {
                 if (entry.state.userId !== ctx.sender) {
-                    await message.reply("❌ Hanya pengirim asli yang bisa memproses interaksi ini");
+                    await message.reply("❌ Only the original sender can interact with this.");
                     return;
                 }
                 logger.exec(t, `reply:${entry.state.commandName || "unknown"}`, ctx.pushname, ctx.isGroup, ctx.groupName);

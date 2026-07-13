@@ -27,7 +27,6 @@ import chokidar from "chokidar";
 import { Messages } from "./lib/Messages.js";
 import { initCleanup } from "./services/cleanup.js";
 import { reloadCommand, initCommands, commandsDir } from "./commands/_registry.js";
-import { handleGroupParticipantsUpdate } from "./lib/events/group-participants.js";
 import { upsertBotRegistry } from "./lib/database.js";
 import setting from "./setting.js";
 
@@ -173,11 +172,6 @@ async function connectToWhatsApp() {
     // ── Call rejection ─────────────────────────────────────────
     if (ev["call"]) {
       handleIncomingCall(ev["call"], sock);
-    }
-
-    // ── Group Participants Update ──────────────────────────────
-    if (ev["group-participants.update"]) {
-      handleGroupParticipantsUpdate(ev["group-participants.update"], sock);
     }
   });
 }

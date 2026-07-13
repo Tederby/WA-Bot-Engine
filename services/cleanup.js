@@ -39,8 +39,8 @@ export function initCleanup() {
     // Periodic cleanup
     setInterval(() => {
         let filesPurged = cleanupTempFiles(tempDir, setting.fileExpiry);
-        let statesPurged = cleanupExpiredReplyHandlers(15 * 60 * 1000); // 15 min expiry
-        purgeOldClaims(5 * 60 * 1000); // 5 mins
+        let statesPurged = cleanupExpiredReplyHandlers(setting.replyHandlerExpiry);
+        purgeOldClaims(setting.claimsPurgeAge);
 
         if (filesPurged + statesPurged > 0) {
             console.log(
@@ -52,7 +52,7 @@ export function initCleanup() {
 
     console.log(color("[CLEANUP]", "yellow"), "Cleanup service initialized");
 
-    // Periodic VACUUM to reclaim disk space (every 30 minutes)
+    // Periodic VACUUM to reclaim disk space
     setInterval(() => {
         try {
             db.exec("VACUUM");
@@ -60,7 +60,7 @@ export function initCleanup() {
         } catch (e) {
             console.error(color("[CLEANUP ERROR]", "red"), "VACUUM failed:", e.message);
         }
-    }, 30 * 60 * 1000);
+    }, setting.vacuumInterval);
 }
 
 /**

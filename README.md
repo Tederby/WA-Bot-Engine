@@ -1,6 +1,6 @@
 # WA Bot Engine 🤖
 
-A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://github.com/WhiskeySockets/Baileys) and Node.js. Designed as a **barebone framework** — connect as many bot numbers as you want, then build your own commands and features on top.
+A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://github.com/WhiskeySockets/Baileys) and Node.js. Designed as a **barebone framework**. Connect as many bot numbers as you want, then build your own commands and features on top.
 
 ## ✨ What's Included
 
@@ -94,16 +94,14 @@ wa-bot-engine/
 │   └── ping.js             # Example command
 ├── lib/                    # Core engine libraries
 │   ├── db.js               # SQLite engine (WAL mode)
-│   ├── database.js         # User/group CRUD, bans, multi-bot priority
+│   ├── database.js         # User/group CRUD, bans*, multi-bot priority
 │   ├── Messages.js         # Baileys message wrapper & serializer
 │   ├── commandParser.js    # Command prefix & argument parser
 │   ├── contextBuilder.js   # Message context extraction (sender, group, admin)
 │   ├── middleware.js        # Permission guards
 │   ├── autoDetect.js       # Auto-detect framework (disabled by default)
 │   ├── logger.js           # Centralized console logging
-│   ├── utils.js            # Helpers (chalk colors, spam filter)
-│   └── events/
-│       └── group-participants.js  # Welcome/goodbye handler
+│   └── utils.js            # Helpers (chalk colors, spam filter)
 ├── services/
 │   └── cleanup.js          # Periodic temp/state cleanup + VACUUM
 ├── temp/                   # Per-bot temp files (gitignored)
@@ -217,17 +215,23 @@ registerAutoDetect({
 
 The engine uses SQLite (via `better-sqlite3`) with these built-in tables:
 
-- **users** — Registration, bans, extensible `meta` JSON field
-- **groups** — Welcome/goodbye settings, auto-replies, bans, extensible `meta` JSON field
-- **group_banned_users** — Per-group user bans
+**Core tables:**
+- **users** — Registration, extensible `meta` JSON field
+- **groups** — Group settings, extensible `meta` JSON field
 - **bot_registry** — Multi-bot heartbeat tracking
 - **message_claims** — Multi-bot message deduplication
 - **identity_map** — LID ↔ Phone Number mapping
 
+**Optional tables** (used by the built-in ban system, can be removed):
+- **users.banned** / **groups.banned** — Global user/group bans
+- **group_banned_users** — Per-group user bans
+
+> All optional features are marked with `[OPTIONAL]` comments in the source code. Search for `[OPTIONAL]` to find and remove them if you don't need banning or bot admin roles.
+
 Use the functions in `lib/database.js` to interact with the database:
 
 ```javascript
-import { getUser, saveUser, registerUser, isBanned } from "../lib/database.js";
+import { getUser, saveUser, registerUser } from "../lib/database.js";
 
 // Get or create user
 const user = getUser(sender);

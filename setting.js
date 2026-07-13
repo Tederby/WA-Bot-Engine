@@ -11,10 +11,13 @@ const setting = {
     // ── Spam Filter ─────────────────────────────────────────────────────
     spamDelay: Number(process.env.SPAM_DELAY) || 5000, // ms cooldown per chat
 
-    // ── Temp Files ──────────────────────────────────────────────────────
+    // ── Cleanup ─────────────────────────────────────────────────────────
     tempDir: `./temp/${process.env.BOT_ID || "default"}`,
-    cleanupInterval: 10 * 60 * 1000,  // Scan every 10 minutes
-    fileExpiry: 30 * 60 * 1000,       // Delete temp files older than 30 minutes
+    cleanupInterval: 10 * 60 * 1000,     // Scan every 10 minutes
+    fileExpiry: 30 * 60 * 1000,          // Delete temp files older than 30 minutes
+    replyHandlerExpiry: 15 * 60 * 1000,  // Expire reply handlers after 15 minutes
+    claimsPurgeAge: 5 * 60 * 1000,       // Purge message claims older than 5 minutes
+    vacuumInterval: 30 * 60 * 1000,      // Run SQLite VACUUM every 30 minutes
 };
 
 export default setting;
