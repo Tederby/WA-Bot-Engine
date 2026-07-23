@@ -1,8 +1,8 @@
-# WA Bot Engine 🤖
+# WA Bot Engine
 
 A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://github.com/WhiskeySockets/Baileys) and Node.js. Designed as a **barebone framework**. Connect as many bot numbers as you want, then build your own commands and features on top.
 
-## ✨ What's Included
+## What's Included
 
 - **Multi-Bot** — Run multiple bot numbers from one codebase via PM2. Each instance gets its own session and config.
 - **SQLite Database** — Concurrent-safe database with WAL mode. User/group management, bans, and multi-bot priority out of the box.
@@ -16,17 +16,15 @@ A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://githu
 
 This is an engine, not a full bot. There are no built-in commands except `!ping` (as an example). You build everything else:
 
-- ❌ No media downloaders
-- ❌ No anime/manga search
-- ❌ No sticker maker
-- ❌ No group management commands
-- ❌ No reminder system
+- No media downloaders
+- No sticker maker
+- No group management commands
 
 **That's the point.** Start clean, build what you need.
 
 ---
 
-## 💻 Requirements
+## Requirements
 
 - **Node.js** v18+
 - **PM2** *(optional)* — for multi-bot process management
@@ -34,7 +32,7 @@ This is an engine, not a full bot. There are no built-in commands except `!ping`
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Clone & install
@@ -85,7 +83,7 @@ Restart the bot and check logs for the 8-digit pairing code. Enter it on your ph
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 wa-bot-engine/
@@ -114,7 +112,7 @@ wa-bot-engine/
 
 ---
 
-## 🛠️ Creating Commands
+## Creating Commands
 
 Drop a new `.js` file in `commands/` — the bot picks it up automatically (even at runtime via hot-reload).
 
@@ -211,7 +209,7 @@ registerAutoDetect({
 
 ---
 
-## 🗄️ Database
+## Database
 
 The engine uses SQLite (via `better-sqlite3`) with these built-in tables:
 
@@ -246,6 +244,6 @@ saveUser(sender, user);
 
 ---
 
-## 📜 License
+## License
 
 [MIT](LICENSE)
