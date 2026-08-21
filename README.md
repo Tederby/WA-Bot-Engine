@@ -10,7 +10,11 @@ A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://githu
 - **Command Auto-Loader** — Drop a `.js` file in `commands/` and it works. No manual imports needed.
 - **Middleware Pipeline** — Clean architecture: `guard → ban-check → context → auto-detect → parse → spam-filter → permissions → execute`.
 - **Permission System** — Declarative flags: `groupOnly`, `adminOnly`, `ownerOnly`, `privateOnly`, `botAdminRequired`.
-- **Identity Resolution** — Handles WhatsApp's LID (Linked Device ID) addressing mode transparently.
+- **Identity Resolution** — Handles WhatsApp's LID (Linked Device ID) addressing mode transparently. Strict normalization ensures JIDs match correctly across addressing modes.
+- **JID Utilities** — Shared helpers (`resolveTarget`, `extractTarget`, `findParticipant`) for safe JID resolution in commands.
+- **Call Protection** — Progressive call blocking with deduplication and auto-ban after repeated calls.
+- **Auto-Register** — Users are silently registered on first command execution.
+- **Baileys Patch** — Includes a patch for the tcToken protocol bug via `patch-package`.
 
 ## What's NOT Included
 
@@ -96,10 +100,13 @@ wa-bot-engine/
 │   ├── Messages.js         # Baileys message wrapper & serializer
 │   ├── commandParser.js    # Command prefix & argument parser
 │   ├── contextBuilder.js   # Message context extraction (sender, group, admin)
+│   ├── jidHelper.js        # Shared JID resolution utilities
 │   ├── middleware.js        # Permission guards
-│   ├── autoDetect.js       # Auto-detect framework (disabled by default)
+│   ├── autoDetect.js       # Auto-detect framework (no built-in detectors)
 │   ├── logger.js           # Centralized console logging
 │   └── utils.js            # Helpers (chalk colors, spam filter)
+├── patches/
+│   └── baileys+7.0.0-rc13.patch  # tcToken protocol fix
 ├── services/
 │   └── cleanup.js          # Periodic temp/state cleanup + VACUUM
 ├── temp/                   # Per-bot temp files (gitignored)
@@ -131,8 +138,9 @@ export default {
     // privateOnly: true,      — Only works in DMs
     // botAdminRequired: true, — Bot must be group admin
     // botAdminOnly: true,     — Requires bot admin role
+    // multiBot: true,         — All bots respond (bypasses priority claim)
 
-    async handler({ message, sock, args, rawArgs, prefix, sender, pushname, isGroup, groupName }) {
+    async handler({ message, sock, args, rawArgs, prefix, commandName, sender, pushname, isGroup, groupName }) {
         await message.reply(`Hello ${pushname}! 👋`);
     }
 };
@@ -149,7 +157,8 @@ Every command handler receives these properties:
 | `args` | string[] | Parsed arguments (split by whitespace) |
 | `rawArgs` | string | Raw argument string (after command name) |
 | `prefix` | string | The prefix used (e.g. `!`, `.`, `#`) |
-| `sender` | string | Sender's JID |
+| `commandName` | string | The command name that was invoked |
+| `sender` | string | Sender's JID (normalized, device ID stripped) |
 | `pushname` | string | Sender's display name |
 | `isGroup` | boolean | Whether message is from a group |
 | `groupName` | string | Group name (empty if DM) |
@@ -205,6 +214,32 @@ registerAutoDetect({
         await message.reply("🔗 Detected a GitHub repo link!");
     },
 });
+```
+
+---
+
+## JID Helper
+
+Use `lib/jidHelper.js` for safe JID resolution in your commands. Never resolve JIDs manually.
+
+```javascript
+import { resolveTarget, extractTarget, findParticipant } from "../lib/jidHelper.js";
+
+// Resolve a raw JID to canonical form
+const { jid, baseId } = resolveTarget(rawJid);
+
+// Extract target from mention > quoted > manual number
+const target = extractTarget(message, args);
+if (target) {
+    console.log(target.jid);    // "62812xxx@s.whatsapp.net"
+    console.log(target.baseId); // "62812xxx"
+}
+
+// Find participant in group for API calls (kick/promote/etc)
+const found = findParticipant(groupMetadata, target.baseId);
+if (found) {
+    await sock.groupParticipantsUpdate(chatId, [found.participant], "remove");
+}
 ```
 
 ---

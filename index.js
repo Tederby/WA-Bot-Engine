@@ -27,7 +27,8 @@ import chokidar from "chokidar";
 import { Messages } from "./lib/Messages.js";
 import { initCleanup } from "./services/cleanup.js";
 import { reloadCommand, initCommands, commandsDir } from "./commands/_registry.js";
-import { upsertBotRegistry } from "./lib/database.js";
+import { upsertBotRegistry, getUser, saveUser, banUser } from "./lib/database.js";
+import { resolveTarget } from "./lib/jidHelper.js";
 import setting from "./setting.js";
 
 // ── Initialize command registry (must happen after all static imports settle) ─
@@ -337,15 +338,69 @@ function handleMessageUpsert(upsert, sock) {
   msgHandler(upsert, sock, message);
 }
 
+// ── Call Dedup (prevents Baileys from firing multiple events per call) ──────
+const processedCalls = new Map();
+const CALL_DEDUP_TTL = 60_000; // 60 seconds
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, ts] of processedCalls) {
+    if (now - ts > CALL_DEDUP_TTL) processedCalls.delete(id);
+  }
+}, 600000); // Cleanup setiap 10 menit
+
 async function handleIncomingCall(callEvent, sock) {
-  const { id, chatId, isGroup } = callEvent[0];
+  const call = callEvent[0];
+  if (!call) return;
+  
+  const { id, chatId, isGroup, status } = call;
   if (isGroup) return;
 
-  await sock.rejectCall(id, chatId);
-  await sock.sendMessage(
-    chatId,
-    { text: "Tidak bisa menerima panggilan suara/video." }
-  );
+  // Tolak panggilan
+  await sock.rejectCall(id, chatId).catch(() => {});
+
+  // Cegah spam event call dari Baileys (biasanya event muncul berkali-kali untuk 1 panggilan)
+  // Hanya proses jika statusnya 'offer' atau ID belum pernah diproses
+  if (status && status !== "offer") return;
+  
+  if (processedCalls.has(id)) return;
+  processedCalls.set(id, Date.now());
+
+  // Resolve chatId ke canonical PN — chatId bisa berupa LID di addressing mode baru
+  const { jid: resolvedJid, baseId } = resolveTarget(chatId);
+  const userId = resolvedJid || chatId; // Fallback ke raw chatId jika resolve gagal
+
+  // Abaikan owner dari hukuman ban (tapi telpon tetap ditolak di atas)
+  const normalizeNum = (n) => n.replace(/^\+/, "").replace(/^0/, "62");
+  if (setting.owner.some(num => normalizeNum(num) === baseId)) return;
+
+  // Track peringatan dan global ban
+  const user = getUser(userId);
+  if (user.banned) return; // Jika sudah di-ban, diamkan saja (silent drop)
+
+  user.meta = user.meta || {};
+  user.meta.callCount = (user.meta.callCount || 0) + 1;
+  saveUser(userId, user);
+
+  if (user.meta.callCount >= 4) {
+    banUser(userId, sock.user.id, "Spam panggilan telpon / video");
+    await sock.sendMessage(
+      chatId,
+      { text: "🚫 Kamu telah di-ban secara global karena menelpon bot berulang kali." }
+    ).catch(() => {});
+  } else {
+    let warningText = `⚠️ Bot tidak bisa menerima panggilan suara/video.`;
+    if (user.meta.callCount === 3) {
+      warningText += `\n\n*Peringatan terakhir!* Jika menelpon lagi, kamu akan terkena global ban.`;
+    } else {
+      warningText += `\n\n_Peringatan ${user.meta.callCount}/3. Setelah 3x peringatan, otomatis global ban._`;
+    }
+    
+    await sock.sendMessage(
+      chatId,
+      { text: warningText }
+    ).catch(() => {});
+  }
 }
 
 // ── Start ───────────────────────────────────────────────────────────────────

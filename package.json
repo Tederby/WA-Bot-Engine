@@ -5,19 +5,21 @@
   "scripts": {
     "start": "node index.js",
     "pm2": "pm2 start ecosystem.config.cjs",
-    "pm2:stop": "pm2 stop ecosystem.config.cjs"
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "postinstall": "patch-package"
   },
   "license": "MIT",
   "type": "module",
   "dependencies": {
     "any-ascii": "^0.3.2",
     "axios": "^1.13.1",
-    "baileys": "^7.0.0-rc.9",
+    "baileys": "^7.0.0-rc13",
     "better-sqlite3": "^12.11.1",
     "chalk": "^4.1.2",
     "chokidar": "^4.0.3",
     "dotenv": "^17.2.1",
     "pino": "^9.2.0",
+    "patch-package": "^8.0.1",
     "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {

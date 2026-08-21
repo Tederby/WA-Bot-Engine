@@ -1,0 +1,30 @@
+diff --git a/node_modules/baileys/lib/Utils/tc-token-utils.js b/node_modules/baileys/lib/Utils/tc-token-utils.js
+index 7db5863..4939bb3 100644
+--- a/node_modules/baileys/lib/Utils/tc-token-utils.js
++++ b/node_modules/baileys/lib/Utils/tc-token-utils.js
+@@ -114,11 +114,20 @@ export async function buildTcTokenFromJid({ authState, jid, baseContent = [], ge
+             }
+             return baseContent.length > 0 ? baseContent : undefined;
+         }
+-        baseContent.push({
+-            tag: 'tctoken',
+-            attrs: {},
+-            content: tcTokenBuffer
+-        });
++        const pictureNode = baseContent.find(node => node.tag === 'picture');
++        if (pictureNode) {
++            pictureNode.content = [{
++                tag: 'tctoken',
++                attrs: entry?.timestamp ? { t: String(entry.timestamp) } : {},
++                content: tcTokenBuffer
++            }];
++        } else {
++            baseContent.push({
++                tag: 'tctoken',
++                attrs: entry?.timestamp ? { t: String(entry.timestamp) } : {},
++                content: tcTokenBuffer
++            });
++        }
+         return baseContent;
+     }
+     catch (error) {
