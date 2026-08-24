@@ -56,12 +56,12 @@ if (!fs.existsSync("./sessions")) fs.mkdirSync("./sessions", { recursive: true }
 
 // ── Connection State ────────────────────────────────────────────────────────
 
-let currentSock = null;          // Referensi socket aktif (untuk graceful shutdown)
+let currentSock = null;          // Active socket reference (for graceful shutdown)
 let registryInterval = null;     // Auto-Discovery Heartbeat
-let reconnectAttempts = 0;       // Retry counter per siklus
-let qrCount = 0;                 // Berapa kali QR di-generate tanpa di-scan
-let isSuspended = false;         // Flag agar tidak reconnect setelah suspend
-let pairingCodeRequested = false; // Mencegah request berulang
+let reconnectAttempts = 0;       // Retry counter per cycle
+let qrCount = 0;                 // How many times QR was generated without being scanned
+let isSuspended = false;         // Flag to prevent reconnect after suspend
+let pairingCodeRequested = false; // Prevent duplicate pairing requests
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const MAX_QR_ATTEMPTS = 5;
@@ -85,34 +85,34 @@ function saveCycleCount(count) {
 const MAX_CYCLES = 3;
 
 /**
- * Hitung delay reconnect dengan exponential backoff.
- * @param {number} attempt    - Percobaan ke-berapa (1-indexed)
- * @param {boolean} isHard    - true untuk error berat (loggedOut/401), false untuk error ringan
- * @returns {number} delay dalam ms
+ * Calculate reconnect delay with exponential backoff.
+ * @param {number} attempt    - Attempt number (1-indexed)
+ * @param {boolean} isHard    - true for severe errors (loggedOut/401), false for soft errors
+ * @returns {number} delay in ms
  */
 function getBackoffDelay(attempt, isHard) {
   if (isHard) {
     // loggedOut/401: 5s → 10s → 20s → 40s → 60s (cap)
     return Math.min(5000 * Math.pow(2, attempt - 1), 60000);
   }
-  // Error ringan (timedOut, connectionClosed, dll): 3s → 5s → 7s → ... → 30s (cap)
+  // Soft errors (timedOut, connectionClosed, etc): 3s → 5s → 7s → ... → 30s (cap)
   return Math.min(3000 + (attempt * 2000), 30000);
 }
 
 /**
- * Suspend program — tahan event loop agar PM2 tidak auto-restart.
- * @param {string} reason - Alasan suspend untuk di-log
+ * Suspend program — keep event loop alive so PM2 doesn't auto-restart.
+ * @param {string} reason - Suspension reason to log
  */
 function suspendProgram(reason) {
   isSuspended = true;
   console.log(`${TAG} | 🛑 SUSPENDED: ${reason}`);
-  console.log(`${TAG} | Untuk melanjutkan, jalankan: pm2 restart ${BOT_ID}`);
+  console.log(`${TAG} | To resume, run: pm2 restart ${BOT_ID}`);
   setInterval(() => {}, 1000 * 60 * 60);
 }
 
 // ── Graceful Shutdown ───────────────────────────────────────────────────────
-// Tutup WebSocket dengan benar sebelum proses mati.
-// Ini MENCEGAH false loggedOut saat PM2 restart.
+// Close WebSocket cleanly before the process dies.
+// This PREVENTS false loggedOut errors during PM2 restart.
 
 async function gracefulShutdown(signal) {
   console.log(`${TAG} | Received ${signal}, shutting down gracefully...`);
@@ -121,10 +121,10 @@ async function gracefulShutdown(signal) {
       currentSock.end();
       console.log(`${TAG} | WebSocket closed cleanly.`);
     } catch (e) {
-      // Abaikan error saat cleanup
+      // Ignore errors during cleanup
     }
   }
-  // Beri waktu 2 detik untuk cleanup sebelum exit
+  // Allow 2 seconds for cleanup before exit
   setTimeout(() => process.exit(0), 2000);
 }
 
@@ -189,25 +189,26 @@ function handleConnectionUpdate(update, sock) {
       pairingCodeRequested = true;
       (async () => {
         try {
-          // Normalisasi nomor
+          // Normalize phone number — strip non-digits, apply country code for local format
           let number = setting.pairingNumber.replace(/[^0-9]/g, "");
-          if (number.startsWith("08")) number = "628" + number.slice(2);
-          else if (number.startsWith("8")) number = "628" + number.slice(1);
+          if (number.startsWith("0")) {
+            number = setting.defaultCountryCode + number.slice(1);
+          }
           
           const code = await sock.requestPairingCode(number);
           console.log(`\n======================================================`);
           console.log(`${TAG} | 📱 PAIRING CODE: ${code}`);
           console.log(`======================================================\n`);
         } catch (err) {
-          console.error(`${TAG} | ❌ Gagal meminta Pairing Code:`, err.message);
+          console.error(`${TAG} | ❌ Failed to request Pairing Code:`, err.message);
         }
       })();
     } else if (!setting.pairingNumber) {
       qrCount++;
       if (qrCount >= MAX_QR_ATTEMPTS) {
         return suspendProgram(
-          `QR code sudah di-generate ${qrCount}x tanpa di-scan. ` +
-          `Jalankan 'pm2 restart ${BOT_ID}' untuk mencoba lagi.`
+          `QR code generated ${qrCount}x without being scanned. ` +
+          `Run 'pm2 restart ${BOT_ID}' to try again.`
         );
       }
       console.log(`${TAG} | QR Code (${qrCount}/${MAX_QR_ATTEMPTS}):`);
@@ -226,8 +227,8 @@ function handleConnectionUpdate(update, sock) {
       console.error(`${TAG} | Error details:`, lastDisconnect.error?.message || lastDisconnect.error);
     }
 
-    // Error berat: loggedOut, multideviceMismatch, 401, 403
-    // Kadang bersifat transient (network glitch), jadi masih dicoba retry.
+    // Severe errors: loggedOut, multideviceMismatch, 401, 403
+    // Can be transient (network glitch), so still retry.
     const isHardError =
       reason === "loggedOut" ||
       reason === "multideviceMismatch" ||
@@ -242,55 +243,55 @@ function handleConnectionUpdate(update, sock) {
         saveCycleCount(cycleCount);
 
         if (cycleCount >= MAX_CYCLES) {
-          // Sudah gagal total (MAX_RECONNECT_ATTEMPTS × MAX_CYCLES kali).
-          // Hapus session dan suspend — butuh scan QR baru.
-          console.log(`${TAG} | Gagal total ${MAX_RECONNECT_ATTEMPTS * MAX_CYCLES}x (${MAX_CYCLES} siklus). Menghapus folder session...`);
+          // Total failure (MAX_RECONNECT_ATTEMPTS × MAX_CYCLES times).
+          // Delete session and suspend — needs new QR scan.
+          console.log(`${TAG} | Total failure ${MAX_RECONNECT_ATTEMPTS * MAX_CYCLES}x (${MAX_CYCLES} cycles). Deleting session folder...`);
           try {
             if (fs.existsSync(SESSION_DIR)) {
               fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-              console.log(`${TAG} | Folder session berhasil dihapus.`);
+              console.log(`${TAG} | Session folder deleted successfully.`);
             }
           } catch (err) {
-            console.error(`${TAG} | Gagal menghapus folder session:`, err.message);
+            console.error(`${TAG} | Failed to delete session folder:`, err.message);
           }
           saveCycleCount(0);
           return suspendProgram(
-            "Session dihapus karena gagal reconnect berulang kali. " +
-            `Jalankan 'pm2 restart ${BOT_ID}' untuk scan QR baru.`
+            "Session deleted due to repeated reconnect failures. " +
+            `Run 'pm2 restart ${BOT_ID}' to scan a new QR code.`
           );
         }
 
-        // Siklus belum habis — suspend, biarkan user restart manual
-        reconnectAttempts = 0; // Reset untuk siklus berikutnya
+        // Cycles remaining — suspend, let user restart manually
+        reconnectAttempts = 0; // Reset for next cycle
         return suspendProgram(
-          `Sesi gagal setelah ${MAX_RECONNECT_ATTEMPTS} percobaan ` +
-          `(siklus ${cycleCount}/${MAX_CYCLES}). ` +
-          `Jalankan 'pm2 restart ${BOT_ID}' untuk melanjutkan ke siklus berikutnya.`
+          `Session failed after ${MAX_RECONNECT_ATTEMPTS} attempts ` +
+          `(cycle ${cycleCount}/${MAX_CYCLES}). ` +
+          `Run 'pm2 restart ${BOT_ID}' to continue to the next cycle.`
         );
       }
 
-      // Masih ada sisa retry — coba lagi dengan exponential backoff
+      // Retries remaining — try again with exponential backoff
       const delay = getBackoffDelay(reconnectAttempts, true);
       console.log(
-        `${TAG} | Sesi terputus (${reason}). ` +
-        `Mencoba reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) ` +
-        `siklus ${cycleCount + 1}/${MAX_CYCLES} dalam ${delay / 1000}s...`
+        `${TAG} | Session disconnected (${reason}). ` +
+        `Reconnecting (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) ` +
+        `cycle ${cycleCount + 1}/${MAX_CYCLES} in ${delay / 1000}s...`
       );
       setTimeout(connectToWhatsApp, delay);
 
     } else {
-      // Error ringan: timedOut, connectionClosed, restartRequired, dll.
-      // Biasanya bisa langsung retry.
+      // Soft errors: timedOut, connectionClosed, restartRequired, etc.
+      // Usually safe to retry immediately.
       reconnectAttempts++;
       const delay = getBackoffDelay(reconnectAttempts, false);
-      console.log(`${TAG} | Mencoba reconnect dalam ${delay / 1000}s... (attempt ${reconnectAttempts})`);
+      console.log(`${TAG} | Reconnecting in ${delay / 1000}s... (attempt ${reconnectAttempts})`);
 
-      // Safety net: jika error ringan terus-menerus, jangan infinite loop
+      // Safety net: prevent infinite loop on persistent soft errors
       if (reconnectAttempts >= 10) {
         reconnectAttempts = 0;
         return suspendProgram(
-          "Error ringan terjadi 10x berturut-turut. " +
-          `Kemungkinan ada masalah network VPS. Jalankan 'pm2 restart ${BOT_ID}' untuk retry.`
+          "Soft errors occurred 10x in a row. " +
+          `Possible VPS network issue. Run 'pm2 restart ${BOT_ID}' to retry.`
         );
       }
       setTimeout(connectToWhatsApp, delay);
@@ -334,7 +335,7 @@ function handleMessageUpsert(upsert, sock) {
 
   if (message.key && message.key.remoteJid === "status@broadcast") return;
 
-  // fromMe diizinkan agar pemilik bot bisa memproses command
+  // fromMe is allowed so the bot owner can process their own commands
   msgHandler(upsert, sock, message);
 }
 
@@ -347,7 +348,7 @@ setInterval(() => {
   for (const [id, ts] of processedCalls) {
     if (now - ts > CALL_DEDUP_TTL) processedCalls.delete(id);
   }
-}, 600000); // Cleanup setiap 10 menit
+}, 600000); // Cleanup every 10 minutes
 
 async function handleIncomingCall(callEvent, sock) {
   const call = callEvent[0];
@@ -356,44 +357,44 @@ async function handleIncomingCall(callEvent, sock) {
   const { id, chatId, isGroup, status } = call;
   if (isGroup) return;
 
-  // Tolak panggilan
+  // Reject call
   await sock.rejectCall(id, chatId).catch(() => {});
 
-  // Cegah spam event call dari Baileys (biasanya event muncul berkali-kali untuk 1 panggilan)
-  // Hanya proses jika statusnya 'offer' atau ID belum pernah diproses
+  // Prevent duplicate call events from Baileys (multiple events per single call)
+  // Only process if status is 'offer' or ID hasn't been processed before
   if (status && status !== "offer") return;
   
   if (processedCalls.has(id)) return;
   processedCalls.set(id, Date.now());
 
-  // Resolve chatId ke canonical PN — chatId bisa berupa LID di addressing mode baru
+  // Resolve chatId to canonical PN — chatId may be LID in newer addressing modes
   const { jid: resolvedJid, baseId } = resolveTarget(chatId);
-  const userId = resolvedJid || chatId; // Fallback ke raw chatId jika resolve gagal
+  const userId = resolvedJid || chatId; // Fallback to raw chatId if resolve fails
 
-  // Abaikan owner dari hukuman ban (tapi telpon tetap ditolak di atas)
-  const normalizeNum = (n) => n.replace(/^\+/, "").replace(/^0/, "62");
+  // Exempt owners from ban penalties (call is still rejected above)
+  const normalizeNum = (n) => n.replace(/^\+/, "").replace(/^0/, setting.defaultCountryCode);
   if (setting.owner.some(num => normalizeNum(num) === baseId)) return;
 
-  // Track peringatan dan global ban
+  // Track warnings and auto-ban
   const user = getUser(userId);
-  if (user.banned) return; // Jika sudah di-ban, diamkan saja (silent drop)
+  if (user.banned) return; // Already banned — silent drop
 
   user.meta = user.meta || {};
   user.meta.callCount = (user.meta.callCount || 0) + 1;
   saveUser(userId, user);
 
   if (user.meta.callCount >= 4) {
-    banUser(userId, sock.user.id, "Spam panggilan telpon / video");
+    banUser(userId, sock.user.id, "Repeated voice/video call spam");
     await sock.sendMessage(
       chatId,
-      { text: "🚫 Kamu telah di-ban secara global karena menelpon bot berulang kali." }
+      { text: "🚫 You have been globally banned for repeatedly calling the bot." }
     ).catch(() => {});
   } else {
-    let warningText = `⚠️ Bot tidak bisa menerima panggilan suara/video.`;
+    let warningText = `⚠️ This bot does not accept voice/video calls.`;
     if (user.meta.callCount === 3) {
-      warningText += `\n\n*Peringatan terakhir!* Jika menelpon lagi, kamu akan terkena global ban.`;
+      warningText += `\n\n*Final warning!* One more call and you will be globally banned.`;
     } else {
-      warningText += `\n\n_Peringatan ${user.meta.callCount}/3. Setelah 3x peringatan, otomatis global ban._`;
+      warningText += `\n\n_Warning ${user.meta.callCount}/3. After 3 warnings, automatic global ban._`;
     }
     
     await sock.sendMessage(

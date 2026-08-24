@@ -139,6 +139,7 @@ export default {
     // botAdminRequired: true, — Bot must be group admin
     // botAdminOnly: true,     — Requires bot admin role
     // multiBot: true,         — All bots respond (bypasses priority claim)
+    // silentDrop: true,       — Silently ignore if permission denied (no error reply)
 
     async handler({ message, sock, args, rawArgs, prefix, commandName, sender, pushname, isGroup, groupName }) {
         await message.reply(`Hello ${pushname}! 👋`);

@@ -23,10 +23,10 @@ module.exports = {
       env: {
         BOT_ID: "bot1",
         BOT_NAME: "MyBot",
-        OWNER_NUMBER: "628xxxxxxxxxx",
+        OWNER_NUMBER: "<country_code><number>",
         PREFIXES: "!.#/-",
         SPAM_DELAY: "5000",
-        // PAIRING_NUMBER: "628xxxxxxxxxx",
+        // PAIRING_NUMBER: "<country_code><number>",
       },
     },
     // ── Add more bots below ─────────────────────────────────────
@@ -37,10 +37,10 @@ module.exports = {
     //   env: {
     //     BOT_ID: "bot2",
     //     BOT_NAME: "MyBot2",
-    //     OWNER_NUMBER: "628xxxxxxxxxx",
+    //     OWNER_NUMBER: "<country_code><number>",
     //     PREFIXES: "!.#/-",
     //     SPAM_DELAY: "5000",
-    //     // PAIRING_NUMBER: "628xxxxxxxxxx",
+    //     // PAIRING_NUMBER: "<country_code><number>",
     //   },
     // },
   ],

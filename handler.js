@@ -152,8 +152,8 @@ let msgHandler = async (upsert, sock, message) => {
         }
 
         // ── 6. Auto-Register (silent) ────────────────────────────────
-        // Jika user belum terdaftar di database, register otomatis
-        // menggunakan pushname sebagai nama tampilan.
+        // If user is not yet registered in the database, silently
+        // register them using their pushname as display name.
         if (!isRegistered(ctx.sender)) {
             registerUser(ctx.sender, ctx.pushname);
         }
