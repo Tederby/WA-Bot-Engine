@@ -1,8 +1,8 @@
-# WA Bot Engine 🤖
+# WA Bot Engine
 
 A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://github.com/WhiskeySockets/Baileys) and Node.js. Designed as a **barebone framework**. Connect as many bot numbers as you want, then build your own commands and features on top.
 
-## ✨ What's Included
+## What's Included
 
 - **Multi-Bot** — Run multiple bot numbers from one codebase via PM2. Each instance gets its own session and config.
 - **SQLite Database** — Concurrent-safe database with WAL mode. User/group management, bans, and multi-bot priority out of the box.
@@ -11,23 +11,25 @@ A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://githu
 - **Command Auto-Loader** — Drop a `.js` file in `commands/` and it works. No manual imports needed.
 - **Middleware Pipeline** — Clean architecture: `guard → ban-check → context → auto-detect → parse → spam-filter → permissions → execute`.
 - **Permission System** — Declarative flags: `groupOnly`, `adminOnly`, `ownerOnly`, `privateOnly`, `botAdminRequired`.
-- **Identity Resolution** — Handles WhatsApp's LID (Linked Device ID) addressing mode transparently.
+- **Identity Resolution** — Handles WhatsApp's LID (Linked Device ID) addressing mode transparently. Strict normalization ensures JIDs match correctly across addressing modes.
+- **JID Utilities** — Shared helpers (`resolveTarget`, `extractTarget`, `findParticipant`) for safe JID resolution in commands.
+- **Call Protection** — Progressive call blocking with deduplication and auto-ban after repeated calls.
+- **Auto-Register** — Users are silently registered on first command execution.
+- **Baileys Patch** — Includes a patch for the tcToken protocol bug via `patch-package`.
 
 ## What's NOT Included
 
 This is an engine, not a full bot. There are no built-in feature commands except `!ping` and `!html` (as minimal working examples). You build everything else:
 
-- ❌ No media downloaders
-- ❌ No anime/manga search
-- ❌ No sticker maker
-- ❌ No group management commands
-- ❌ No reminder system
+- No media downloaders
+- No sticker maker
+- No group management commands
 
 **That's the point.** Start clean, build what you need.
 
 ---
 
-## 💻 Requirements
+## Requirements
 
 - **Node.js** v18+
 - **PM2** *(optional)* — for multi-bot process management
@@ -35,7 +37,7 @@ This is an engine, not a full bot. There are no built-in feature commands except
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Clone & install
@@ -86,7 +88,7 @@ Restart the bot and check logs for the 8-digit pairing code. Enter it on your ph
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 wa-bot-engine/
@@ -101,10 +103,13 @@ wa-bot-engine/
 │   ├── Messages.js         # Baileys message wrapper & serializer
 │   ├── commandParser.js    # Command prefix & argument parser
 │   ├── contextBuilder.js   # Message context extraction (sender, group, admin)
+│   ├── jidHelper.js        # Shared JID resolution utilities
 │   ├── middleware.js        # Permission guards
-│   ├── autoDetect.js       # Auto-detect framework (disabled by default)
+│   ├── autoDetect.js       # Auto-detect framework (no built-in detectors)
 │   ├── logger.js           # Centralized console logging
 │   └── utils.js            # Helpers (chalk colors, spam filter)
+├── patches/
+│   └── baileys+7.0.0-rc13.patch  # tcToken protocol fix
 ├── services/
 │   └── cleanup.js          # Periodic temp/state cleanup + VACUUM
 ├── temp/                   # Per-bot temp files (gitignored)
@@ -117,7 +122,7 @@ wa-bot-engine/
 
 ---
 
-## 🛠️ Creating Commands
+## Creating Commands
 
 Drop a new `.js` file in `commands/` — the bot picks it up automatically (even at runtime via hot-reload).
 
@@ -136,8 +141,10 @@ export default {
     // privateOnly: true,      — Only works in DMs
     // botAdminRequired: true, — Bot must be group admin
     // botAdminOnly: true,     — Requires bot admin role
+    // multiBot: true,         — All bots respond (bypasses priority claim)
+    // silentDrop: true,       — Silently ignore if permission denied (no error reply)
 
-    async handler({ message, sock, args, rawArgs, prefix, sender, pushname, isGroup, groupName }) {
+    async handler({ message, sock, args, rawArgs, prefix, commandName, sender, pushname, isGroup, groupName }) {
         await message.reply(`Hello ${pushname}! 👋`);
     }
 };
@@ -154,7 +161,8 @@ Every command handler receives these properties:
 | `args` | string[] | Parsed arguments (split by whitespace) |
 | `rawArgs` | string | Raw argument string (after command name) |
 | `prefix` | string | The prefix used (e.g. `!`, `.`, `#`) |
-| `sender` | string | Sender's JID |
+| `commandName` | string | The command name that was invoked |
+| `sender` | string | Sender's JID (normalized, device ID stripped) |
 | `pushname` | string | Sender's display name |
 | `isGroup` | boolean | Whether message is from a group |
 | `groupName` | string | Group name (empty if DM) |
@@ -254,7 +262,33 @@ You can also render arbitrary HTML directly using the built-in `!html` command (
 
 ---
 
-## 🗄️ Database
+## JID Helper
+
+Use `lib/jidHelper.js` for safe JID resolution in your commands. Never resolve JIDs manually.
+
+```javascript
+import { resolveTarget, extractTarget, findParticipant } from "../lib/jidHelper.js";
+
+// Resolve a raw JID to canonical form
+const { jid, baseId } = resolveTarget(rawJid);
+
+// Extract target from mention > quoted > manual number
+const target = extractTarget(message, args);
+if (target) {
+    console.log(target.jid);    // "62812xxx@s.whatsapp.net"
+    console.log(target.baseId); // "62812xxx"
+}
+
+// Find participant in group for API calls (kick/promote/etc)
+const found = findParticipant(groupMetadata, target.baseId);
+if (found) {
+    await sock.groupParticipantsUpdate(chatId, [found.participant], "remove");
+}
+```
+
+---
+
+## Database
 
 The engine uses SQLite (via `better-sqlite3`) with these built-in tables:
 
@@ -289,6 +323,6 @@ saveUser(sender, user);
 
 ---
 
-## 📜 License
+## License
 
 [MIT](LICENSE)

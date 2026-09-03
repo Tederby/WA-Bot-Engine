@@ -11,6 +11,11 @@ const setting = {
     // ── Spam Filter ─────────────────────────────────────────────────────
     spamDelay: Number(process.env.SPAM_DELAY) || 5000, // ms cooldown per chat
 
+    // ── Phone Number Normalization ──────────────────────────────────
+    // When users input local-format numbers (e.g. "08123..."), the engine
+    // prepends this country code. Set to your country's calling code.
+    defaultCountryCode: process.env.DEFAULT_COUNTRY_CODE || "62",
+
     // ── Cleanup ─────────────────────────────────────────────────────────
     tempDir: `./temp/${process.env.BOT_ID || "default"}`,
     cleanupInterval: 10 * 60 * 1000,     // Scan every 10 minutes

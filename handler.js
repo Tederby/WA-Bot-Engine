@@ -14,7 +14,7 @@ import { buildContext } from "./lib/contextBuilder.js";
 import { runAutoDetects } from "./lib/autoDetect.js";
 import { logger } from "./lib/logger.js";
 import { checkPermissions } from "./lib/middleware.js";
-import { isBanned, isGroupBanned, getActiveBotsInGroup, claimMessage } from "./lib/database.js";
+import { isBanned, isGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser } from "./lib/database.js";
 import setting from "./setting.js";
 
 // ── Blocklist Cache (avoid network call per-message) ────────────────────────
@@ -59,6 +59,10 @@ let msgHandler = async (upsert, sock, message) => {
         if (ctx.isGroup && isGroupBanned(message.chat)) return;
         if (isBanned(ctx.sender)) return;
 
+        // ── 1. Command Parsing ──────────────────────────────────────
+        const parsed = parseCommand(text);
+        const cmd = parsed ? getCommand(parsed.commandName) : null;
+
         // ── Block check (group only) ────────────────────────────────
         if (ctx.isGroup) {
             const listBlocked = await getCachedBlocklist(sock);
@@ -68,7 +72,7 @@ let msgHandler = async (upsert, sock, message) => {
             const botId = process.env.BOT_ID || setting.botId || "bot";
             const participants = ctx.groupMetadata?.participants;
             
-            if (participants && participants.length > 0) {
+            if (participants && participants.length > 0 && !(cmd && cmd.multiBot)) {
                 const participantJids = participants.map(p => p.id);
                 const activeBots = getActiveBotsInGroup(participantJids);
                 
@@ -87,10 +91,6 @@ let msgHandler = async (upsert, sock, message) => {
                 }
             }
         }
-
-        // ── 1. Command Parsing ──────────────────────────────────────
-        const parsed = parseCommand(text);
-        const cmd = parsed ? getCommand(parsed.commandName) : null;
 
         // ── 2. Reply Handler Interception ───────────────────────────
         // Catches replies to multi-step commands (e.g. ytdlf format selection)
@@ -138,12 +138,27 @@ let msgHandler = async (upsert, sock, message) => {
 
         // ── 5. Permission Guard (Middleware) ────────────────────────
         const guardMsg = checkPermissions(cmd, { ...ctx, chatId: message.chat });
+        
+        if (cmd.ownerOnly) {
+            const status = guardMsg ? "BLOCKED" : "ALLOWED";
+            logger.auth(t, cmdLabel, ctx.pushname, ctx.isGroup, ctx.groupName, status);
+        }
+
         if (guardMsg) {
-            await message.reply(guardMsg);
+            if (guardMsg !== "SILENT_DROP") {
+                await message.reply(guardMsg);
+            }
             return;
         }
 
-        // ── 6. Log & Execute ────────────────────────────────────────
+        // ── 6. Auto-Register (silent) ────────────────────────────────
+        // If user is not yet registered in the database, silently
+        // register them using their pushname as display name.
+        if (!isRegistered(ctx.sender)) {
+            registerUser(ctx.sender, ctx.pushname);
+        }
+
+        // ── 7. Log & Execute ────────────────────────────────────────
         logger.exec(t, cmdLabel, ctx.pushname, ctx.isGroup, ctx.groupName);
         await sock.readMessages([message.key]);
 
@@ -154,6 +169,7 @@ let msgHandler = async (upsert, sock, message) => {
             args,
             rawArgs,
             prefix,
+            commandName,
             ...ctx,
         });
 
