@@ -6,6 +6,7 @@ A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://githu
 
 - **Multi-Bot** — Run multiple bot numbers from one codebase via PM2. Each instance gets its own session and config.
 - **SQLite Database** — Concurrent-safe database with WAL mode. User/group management, bans, and multi-bot priority out of the box.
+- **Interactive HTML UI (Webview)** — Deliver rich, sandboxed HTML/CSS/JS interfaces inside WhatsApp via native `richResponseMessage` protocol.
 - **Hot-Reload** — Edit commands or the handler while the bot is running. Changes apply instantly without restart.
 - **Command Auto-Loader** — Drop a `.js` file in `commands/` and it works. No manual imports needed.
 - **Middleware Pipeline** — Clean architecture: `guard → ban-check → context → auto-detect → parse → spam-filter → permissions → execute`.
@@ -14,7 +15,7 @@ A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://githu
 
 ## What's NOT Included
 
-This is an engine, not a full bot. There are no built-in commands except `!ping` (as an example). You build everything else:
+This is an engine, not a full bot. There are no built-in feature commands except `!ping` and `!html` (as minimal working examples). You build everything else:
 
 - ❌ No media downloaders
 - ❌ No anime/manga search
@@ -91,10 +92,12 @@ Restart the bot and check logs for the 8-digit pairing code. Enter it on your ph
 wa-bot-engine/
 ├── commands/               # Auto-loaded command modules
 │   ├── _registry.js        # Dynamic loader & reply handler registry
-│   └── ping.js             # Example command
+│   ├── ping.js             # Example command
+│   └── html.js             # Example interactive HTML renderer command
 ├── lib/                    # Core engine libraries
 │   ├── db.js               # SQLite engine (WAL mode)
 │   ├── database.js         # User/group CRUD, bans*, multi-bot priority
+│   ├── uiEngine.js         # Interactive HTML webview renderer & UI builder
 │   ├── Messages.js         # Baileys message wrapper & serializer
 │   ├── commandParser.js    # Command prefix & argument parser
 │   ├── contextBuilder.js   # Message context extraction (sender, group, admin)
@@ -207,6 +210,46 @@ registerAutoDetect({
         await message.reply("🔗 Detected a GitHub repo link!");
     },
 });
+```
+
+### Interactive HTML Webviews
+
+Deliver rich, interactive graphical interfaces (cards, menus, or custom HTML5 apps) directly in WhatsApp using `lib/uiEngine.js`:
+
+```javascript
+import { sendUI, renderPage, renderCard } from "../lib/uiEngine.js";
+
+export default {
+    name: "profile",
+    async handler({ message, sock, pushname, sender, isOwner }) {
+        const pageHtml = renderPage({
+            title: "👤 Profile",
+            badge: isOwner ? "OWNER" : "USER",
+            body: renderCard({
+                icon: "👤",
+                title: pushname || "User Profile",
+                subtitle: `ID: ${sender}`,
+                rows: [
+                    { label: "Role", value: isOwner ? "Owner" : "Member" },
+                    { label: "Status", value: "Active" }
+                ]
+            })
+        });
+
+        const sent = await sendUI(sock, message.chat, {
+            title: "User Profile",
+            html: pageHtml
+        });
+
+        // Best Practice: Auto-delete UI webview after 2 minutes to prevent client viewport lag
+        setTimeout(() => {
+            sock.sendMessage(message.chat, { delete: { ...sent.key, fromMe: true } }).catch(() => {});
+        }, 120000);
+    }
+};
+```
+
+You can also render arbitrary HTML directly using the built-in `!html` command (e.g. `!html <h1>Hello World</h1>` or by replying to a message containing HTML code).
 ```
 
 ---
