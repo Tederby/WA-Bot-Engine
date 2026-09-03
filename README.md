@@ -1,90 +1,138 @@
-# WA Bot Engine
+# WA-Bot-Engine
 
-A minimal, multi-instance WhatsApp bot engine built with [Baileys](https://github.com/WhiskeySockets/Baileys) and Node.js. Designed as a **barebone framework**. Connect as many bot numbers as you want, then build your own commands and features on top.
+A minimal, high-performance, multi-instance WhatsApp bot engine built with [Baileys](https://github.com/WhiskeySockets/Baileys), Node.js (ES Modules), and SQLite (WAL mode). 
 
-## What's Included
-
-- **Multi-Bot** — Run multiple bot numbers from one codebase via PM2. Each instance gets its own session and config.
-- **SQLite Database** — Concurrent-safe database with WAL mode. User/group management, bans, and multi-bot priority out of the box.
-- **Interactive HTML UI (Webview)** — Deliver rich, sandboxed HTML/CSS/JS interfaces inside WhatsApp via native `richResponseMessage` protocol.
-- **Hot-Reload** — Edit commands or the handler while the bot is running. Changes apply instantly without restart.
-- **Command Auto-Loader** — Drop a `.js` file in `commands/` and it works. No manual imports needed.
-- **Middleware Pipeline** — Clean architecture: `guard → ban-check → context → auto-detect → parse → spam-filter → permissions → execute`.
-- **Permission System** — Declarative flags: `groupOnly`, `adminOnly`, `ownerOnly`, `privateOnly`, `botAdminRequired`.
-- **Identity Resolution** — Handles WhatsApp's LID (Linked Device ID) addressing mode transparently. Strict normalization ensures JIDs match correctly across addressing modes.
-- **JID Utilities** — Shared helpers (`resolveTarget`, `extractTarget`, `findParticipant`) for safe JID resolution in commands.
-- **Call Protection** — Progressive call blocking with deduplication and auto-ban after repeated calls.
-- **Auto-Register** — Users are silently registered on first command execution.
-- **Baileys Patch** — Includes a patch for the tcToken protocol bug via `patch-package`.
-
-## What's NOT Included
-
-This is an engine, not a full bot. There are no built-in feature commands except `!ping` and `!html` (as minimal working examples). You build everything else:
-
-- No media downloaders
-- No sticker maker
-- No group management commands
-
-**That's the point.** Start clean, build what you need.
+Designed as a **production-ready barebone framework**. Run multiple bot phone numbers concurrently from a single codebase, hot-reload commands with zero downtime, render native interactive HTML webviews, and build custom features without architectural bloat.
 
 ---
 
-## Requirements
+## Highlights
 
-- **Node.js** v18+
-- **PM2** *(optional)* — for multi-bot process management
-- **build-essential** *(Linux)* or **Visual Studio Build Tools** *(Windows)* — for `better-sqlite3` native bindings
+- **Multi-Instance Concurrency (PM2)**: Run dozens of bot numbers simultaneously with process isolation, independent session stores, and atomic SQLite message claim deduplication.
+- **SQLite with WAL Mode**: Embedded zero-config database using `better-sqlite3` with Write-Ahead Logging for high-throughput concurrent reads and writes.
+- **Interactive HTML UI Engine (Webview)**: Send native in-app HTML5/CSS3 graphical interfaces (cards, dashboards, pseudo-buttons, client-side tabs) via WhatsApp's `richResponseMessage` protocol.
+- **Zero-Downtime Hot-Reload**: Live-edit command files and the core message pipeline without disconnecting the WhatsApp socket.
+- **Deterministic Identity Resolution**: Fully resolves WhatsApp's Linked Device ID (LID) privacy mode and multi-device suffixes into canonical phone number JIDs.
+- **Declarative Middleware**: Protect commands with simple declarative flags (`groupOnly`, `adminOnly`, `botAdminRequired`, `ownerOnly`, `privateOnly`, `silentDrop`).
+- **Headless Pairing Code**: Authenticate on headless VPS environments without QR code scanning using 8-character phone pairing codes.
+- **Call Protection**: Automatically rejects unsolicited voice/video calls with progressive warnings and automatic auto-ban.
+
+---
+
+## Documentation Suite
+
+Comprehensive technical guides are available in the [`docs/`](docs/README.md) directory:
+
+| Guide | Description |
+| :--- | :--- |
+| [**Architecture & Pipeline**](docs/ARCHITECTURE.md) | 12-stage message pipeline, PM2 multi-instance model, hot-reload internals, and LID/PN identity resolution. |
+| [**Command & UI Development**](docs/COMMAND_DEVELOPMENT.md) | Command anatomy, declarative permission flags, Interactive HTML UI Engine (`uiEngine`), reply handlers, and auto-detection. |
+| [**Database & Storage**](docs/DATABASE.md) | Complete SQLite schema, WAL configuration, canonical JID rules (`toCanonicalUserId`), and ban subsystems. |
+| [**Configuration & Deployment**](docs/CONFIGURATION_DEPLOYMENT.md) | Environment variables, PM2 setup (`ecosystem.config.cjs`), QR vs. Pairing Code, and automated VACUUM cleanup. |
+| [**Changelog**](docs/CHANGELOG.md) | Structured SemVer release notes documenting features, fixes, and engine upgrades. |
 
 ---
 
 ## Quick Start
 
-```bash
-# Clone & install
-git clone https://github.com/YourUsername/wa-bot-engine.git
-cd wa-bot-engine
-npm install
+### 1. Requirements
+- **Node.js** v18+ (v20 LTS recommended)
+- **C++ Build Tools** (for `better-sqlite3` native compilation):
+  - *Linux*: `sudo apt install -y build-essential python3`
+  - *Windows*: Visual Studio Build Tools (Desktop C++)
 
-# Configure
-cp .env.example .env
-# Edit .env with your phone number and bot name
+### 2. Installation
+```bash
+git clone https://github.com/Tederby/WA-Bot-Engine.git
+cd WA-Bot-Engine
+npm install
 ```
 
-### Single Bot
+### 3. Configuration
+```bash
+cp .env.example .env
+# Configure your OWNER_NUMBER, PREFIXES, and bot settings
+```
 
+### 4. Running the Bot
+
+#### Mode A: Single Bot (Terminal QR Code)
 ```bash
 npm start
-# Scan the QR code in terminal with WhatsApp → Linked Devices
+# Scan the QR code displayed in your terminal with WhatsApp
 ```
 
-### Multi-Bot (PM2)
-
+#### Mode B: Multi-Bot / Production (PM2)
+Edit `ecosystem.config.cjs` to define your bot instances, then start them:
 ```bash
-# Edit ecosystem.config.cjs to define your bot instances
-# Then start all bots:
 npm run pm2
 
-# View QR code for a specific bot:
+# Check status and logs
+pm2 status
 pm2 logs bot1
-
-# Add a new bot: add an entry in ecosystem.config.cjs, then:
-pm2 start ecosystem.config.cjs --only bot2
-pm2 logs bot2    # Scan QR
 ```
 
-### Pairing Code (No QR)
-
-If you can't scan a QR code (headless VPS, etc.), login via phone number:
-
-Set `PAIRING_NUMBER` in `ecosystem.config.cjs`:
+#### Mode C: Headless Pairing Code (No QR)
+Set `PAIRING_NUMBER` in `.env` or `ecosystem.config.cjs`:
 ```javascript
-env: {
-  BOT_ID: "bot1",
-  // ...
-  PAIRING_NUMBER: "6281234567890", // Start with country code
-}
+PAIRING_NUMBER: "6281234567890" // Start with country code
 ```
-Restart the bot and check logs for the 8-digit pairing code. Enter it on your phone via *Linked Devices* > *Link with phone number instead*.
+Start the bot, copy the 8-character pairing code from the logs, and enter it under **Linked Devices** > **Link with phone number instead**.
+
+---
+
+## Creating a Command
+
+Create a `.js` file in `commands/`. The bot discovers and hot-reloads it instantly:
+
+```javascript
+// commands/hello.js
+export default {
+    name: "hello",
+    aliases: ["hi"],
+    category: "general",
+    description: "Greets the user",
+    usage: "!hello",
+
+    async handler({ message, pushname }) {
+        await message.reply(`Hello, ${pushname}! 👋`);
+    }
+};
+```
+
+### Rendering Native HTML Webviews
+
+WA-Bot-Engine can render sandboxed HTML interfaces directly inside WhatsApp:
+
+```javascript
+// commands/card.js
+import { sendUI, renderPage, renderCard } from "../lib/uiEngine.js";
+
+export default {
+    name: "card",
+    async handler({ message, sock, pushname, sender }) {
+        const html = renderPage({
+            title: "Member Card",
+            body: renderCard({
+                icon: "👤",
+                title: pushname || "User",
+                subtitle: sender,
+                content: "<p>Welcome to <b>WA-Bot-Engine</b>!</p>"
+            })
+        });
+
+        const sent = await sendUI(sock, message.chat, {
+            title: "Member Card",
+            html
+        });
+
+        // Auto-delete after 2 minutes to keep chat clean
+        setTimeout(() => {
+            sock.sendMessage(message.chat, { delete: sent.key }).catch(() => {});
+        }, 120_000);
+    }
+};
+```
 
 ---
 
@@ -92,233 +140,37 @@ Restart the bot and check logs for the 8-digit pairing code. Enter it on your ph
 
 ```
 wa-bot-engine/
-├── commands/               # Auto-loaded command modules
-│   ├── _registry.js        # Dynamic loader & reply handler registry
-│   ├── ping.js             # Example command
-│   └── html.js             # Example interactive HTML renderer command
-├── lib/                    # Core engine libraries
-│   ├── db.js               # SQLite engine (WAL mode)
-│   ├── database.js         # User/group CRUD, bans*, multi-bot priority
-│   ├── uiEngine.js         # Interactive HTML webview renderer & UI builder
-│   ├── Messages.js         # Baileys message wrapper & serializer
-│   ├── commandParser.js    # Command prefix & argument parser
-│   ├── contextBuilder.js   # Message context extraction (sender, group, admin)
-│   ├── jidHelper.js        # Shared JID resolution utilities
-│   ├── middleware.js        # Permission guards
-│   ├── autoDetect.js       # Auto-detect framework (no built-in detectors)
-│   ├── logger.js           # Centralized console logging
-│   └── utils.js            # Helpers (chalk colors, spam filter)
+├── commands/                   # Auto-loaded command modules
+│   ├── _registry.js            # Dynamic loader & reply handler registry
+│   ├── ping.js                 # Minimal latency check command
+│   └── html.js                 # Interactive HTML webview renderer command
+├── docs/                       # Technical documentation suite
+│   ├── README.md               # Documentation index
+│   ├── ARCHITECTURE.md         # Pipeline & concurrency architecture
+│   ├── COMMAND_DEVELOPMENT.md  # Command & UI development guide
+│   ├── DATABASE.md             # SQLite schema & canonical JID reference
+│   ├── CONFIGURATION_DEPLOYMENT.md # PM2 & deployment reference
+│   └── CHANGELOG.md            # Structured SemVer changelog
+├── lib/                        # Core engine modules
+│   ├── db.js                   # SQLite connection & WAL pragmas
+│   ├── database.js             # User/group CRUD, canonical ID & claims
+│   ├── uiEngine.js             # Native HTML webview renderer & templates
+│   ├── Messages.js             # Baileys message wrapper & serializer
+│   ├── commandParser.js        # Prefix & argument parsing
+│   ├── contextBuilder.js       # Context resolution (sender, admin, group)
+│   ├── jidHelper.js            # JID normalization & extraction helpers
+│   ├── middleware.js           # Declarative permission checks
+│   ├── autoDetect.js           # Pattern & URL matching registry
+│   ├── logger.js               # Centralized formatted terminal logging
+│   └── utils.js                # Utilities & spam filter
 ├── patches/
-│   └── baileys+7.0.0-rc13.patch  # tcToken protocol fix
+│   └── baileys+7.0.0-rc13.patch # tcToken protocol fix via patch-package
 ├── services/
-│   └── cleanup.js          # Periodic temp/state cleanup + VACUUM
-├── temp/                   # Per-bot temp files (gitignored)
-├── index.js                # Entry point & connection lifecycle
-├── handler.js              # Message processing pipeline
-├── setting.js              # Configuration (reads from env)
-├── ecosystem.config.cjs    # PM2 multi-bot config
-└── database.db             # SQLite database (gitignored)
-```
-
----
-
-## Creating Commands
-
-Drop a new `.js` file in `commands/` — the bot picks it up automatically (even at runtime via hot-reload).
-
-```javascript
-// commands/hello.js
-export default {
-    name: "hello",
-    aliases: ["hi", "hey"],
-    category: "general",
-    description: "Sends a greeting",
-
-    // Optional permission flags:
-    // groupOnly: true,        — Only works in groups
-    // adminOnly: true,        — Requires group admin
-    // ownerOnly: true,        — Requires system owner
-    // privateOnly: true,      — Only works in DMs
-    // botAdminRequired: true, — Bot must be group admin
-    // botAdminOnly: true,     — Requires bot admin role
-    // multiBot: true,         — All bots respond (bypasses priority claim)
-    // silentDrop: true,       — Silently ignore if permission denied (no error reply)
-
-    async handler({ message, sock, args, rawArgs, prefix, commandName, sender, pushname, isGroup, groupName }) {
-        await message.reply(`Hello ${pushname}! 👋`);
-    }
-};
-```
-
-### Handler Context
-
-Every command handler receives these properties:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `message` | object | Extended WAMessage with `.reply()`, `.react()`, `.download()`, `.delete()`, `.replyUpdate()` |
-| `sock` | object | Baileys WASocket instance |
-| `args` | string[] | Parsed arguments (split by whitespace) |
-| `rawArgs` | string | Raw argument string (after command name) |
-| `prefix` | string | The prefix used (e.g. `!`, `.`, `#`) |
-| `commandName` | string | The command name that was invoked |
-| `sender` | string | Sender's JID (normalized, device ID stripped) |
-| `pushname` | string | Sender's display name |
-| `isGroup` | boolean | Whether message is from a group |
-| `groupName` | string | Group name (empty if DM) |
-| `groupMetadata` | object | Full group metadata (empty if DM) |
-| `isGroupAdmins` | boolean | Whether sender is a group admin |
-| `isBotGroupAdmins` | boolean | Whether bot is a group admin |
-| `isOwner` | boolean | Whether sender is the system owner |
-| `isBotAdmin` | boolean | Whether sender is a bot admin |
-| `ownerNumbers` | string[] | Owner JIDs |
-| `botNumber` | string | Bot's own JID |
-
-### Reply Handlers (Multi-Step Commands)
-
-For commands that need follow-up replies (e.g. format selection):
-
-```javascript
-import { registerReplyHandler } from "./_registry.js";
-
-export default {
-    name: "quiz",
-    async handler({ message, sock }) {
-        const sent = await sock.sendMessage(message.chat, {
-            text: "What is 2 + 2? Reply to this message with your answer."
-        }, { quoted: message });
-
-        registerReplyHandler(sent.key.id, async ({ message: reply, sock: s, state }) => {
-            const answer = reply.text?.trim();
-            if (answer === "4") {
-                await reply.reply("✅ Correct!");
-            } else {
-                await reply.reply("❌ Wrong! The answer is 4.");
-            }
-        }, { userId: message.sender, commandName: "quiz" });
-    }
-};
-```
-
-### Auto-Detect (Pattern Matching)
-
-Respond to URLs or text patterns without a command prefix:
-
-```javascript
-// In any module (e.g. commands/mycommand.js or a dedicated file)
-import { registerAutoDetect } from "../lib/autoDetect.js";
-
-registerAutoDetect({
-    name: "github",
-    test(text, message) {
-        if (message?.key?.fromMe) return false;
-        return /github\.com\/[\w-]+\/[\w-]+/i.test(text);
-    },
-    async handler({ text, message, sock }) {
-        await message.reply("🔗 Detected a GitHub repo link!");
-    },
-});
-```
-
-### Interactive HTML Webviews
-
-Deliver rich, interactive graphical interfaces (cards, menus, or custom HTML5 apps) directly in WhatsApp using `lib/uiEngine.js`:
-
-```javascript
-import { sendUI, renderPage, renderCard } from "../lib/uiEngine.js";
-
-export default {
-    name: "profile",
-    async handler({ message, sock, pushname, sender, isOwner }) {
-        const pageHtml = renderPage({
-            title: "👤 Profile",
-            badge: isOwner ? "OWNER" : "USER",
-            body: renderCard({
-                icon: "👤",
-                title: pushname || "User Profile",
-                subtitle: `ID: ${sender}`,
-                rows: [
-                    { label: "Role", value: isOwner ? "Owner" : "Member" },
-                    { label: "Status", value: "Active" }
-                ]
-            })
-        });
-
-        const sent = await sendUI(sock, message.chat, {
-            title: "User Profile",
-            html: pageHtml
-        });
-
-        // Best Practice: Auto-delete UI webview after 2 minutes to prevent client viewport lag
-        setTimeout(() => {
-            sock.sendMessage(message.chat, { delete: { ...sent.key, fromMe: true } }).catch(() => {});
-        }, 120000);
-    }
-};
-```
-
-You can also render arbitrary HTML directly using the built-in `!html` command (e.g. `!html <h1>Hello World</h1>` or by replying to a message containing HTML code).
-```
-
----
-
-## JID Helper
-
-Use `lib/jidHelper.js` for safe JID resolution in your commands. Never resolve JIDs manually.
-
-```javascript
-import { resolveTarget, extractTarget, findParticipant } from "../lib/jidHelper.js";
-
-// Resolve a raw JID to canonical form
-const { jid, baseId } = resolveTarget(rawJid);
-
-// Extract target from mention > quoted > manual number
-const target = extractTarget(message, args);
-if (target) {
-    console.log(target.jid);    // "62812xxx@s.whatsapp.net"
-    console.log(target.baseId); // "62812xxx"
-}
-
-// Find participant in group for API calls (kick/promote/etc)
-const found = findParticipant(groupMetadata, target.baseId);
-if (found) {
-    await sock.groupParticipantsUpdate(chatId, [found.participant], "remove");
-}
-```
-
----
-
-## Database
-
-The engine uses SQLite (via `better-sqlite3`) with these built-in tables:
-
-**Core tables:**
-- **users** — Registration, extensible `meta` JSON field
-- **groups** — Group settings, extensible `meta` JSON field
-- **bot_registry** — Multi-bot heartbeat tracking
-- **message_claims** — Multi-bot message deduplication
-- **identity_map** — LID ↔ Phone Number mapping
-
-**Optional tables** (used by the built-in ban system, can be removed):
-- **users.banned** / **groups.banned** — Global user/group bans
-- **group_banned_users** — Per-group user bans
-
-> All optional features are marked with `[OPTIONAL]` comments in the source code. Search for `[OPTIONAL]` to find and remove them if you don't need banning or bot admin roles.
-
-Use the functions in `lib/database.js` to interact with the database:
-
-```javascript
-import { getUser, saveUser, registerUser } from "../lib/database.js";
-
-// Get or create user
-const user = getUser(sender);
-
-// Register
-registerUser(sender, "John");
-
-// Use meta for custom data
-user.meta.score = 100;
-saveUser(sender, user);
+│   └── cleanup.js              # Background temp file & SQLite VACUUM cleanup
+├── index.js                    # Entry point, socket & connection lifecycle
+├── handler.js                  # 12-stage message processing pipeline
+├── setting.js                  # Consolidated configuration
+└── ecosystem.config.cjs        # PM2 multi-instance cluster definition
 ```
 
 ---

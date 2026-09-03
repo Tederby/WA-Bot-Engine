@@ -14,7 +14,7 @@ import { buildContext } from "./lib/contextBuilder.js";
 import { runAutoDetects } from "./lib/autoDetect.js";
 import { logger } from "./lib/logger.js";
 import { checkPermissions } from "./lib/middleware.js";
-import { isBanned, isGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser } from "./lib/database.js";
+import { isBanned, isGroupBanned, isUserGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser } from "./lib/database.js";
 import setting from "./setting.js";
 
 // ── Blocklist Cache (avoid network call per-message) ────────────────────────
@@ -53,11 +53,12 @@ let msgHandler = async (upsert, sock, message) => {
         const ctx = await buildContext(message, sock);
         if (!ctx.sender) return;
 
-        // ── [OPTIONAL] Global ban checks (silent — no response) ─────
-        // Built-in ban system. Remove these two lines if you don't
+        // ── [OPTIONAL] Ban checks (silent drop — no response) ───────
+        // Built-in ban system. Remove these lines if you don't
         // need user/group banning in your bot.
         if (ctx.isGroup && isGroupBanned(message.chat)) return;
         if (isBanned(ctx.sender)) return;
+        if (ctx.isGroup && isUserGroupBanned(message.chat, ctx.sender)) return;
 
         // ── 1. Command Parsing ──────────────────────────────────────
         const parsed = parseCommand(text);
