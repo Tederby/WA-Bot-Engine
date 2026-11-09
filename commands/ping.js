@@ -4,8 +4,15 @@ export default {
     category: "general",
     description: "Check bot response time",
     usage: "!ping",
+    multiBot: true,
     async handler({ message }) {
         const t = message.messageTimestamp;
-        await message.reply(`Pong! 🏓\n\nSpeed: ${Date.now() - t * 1000} ms`);
+        const latency = Math.max(0, Date.now() - t * 1000);
+        await message.reply(
+            `🏓 *PONG*\n` +
+            `────────────────────────\n` +
+            `⋄ Response : *${latency} ms*\n` +
+            `────────────────────────`
+        );
     }
 };

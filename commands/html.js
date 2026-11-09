@@ -1,5 +1,6 @@
 import vm from "node:vm";
 import { sendUI } from "../lib/uiEngine.js";
+import { extractFlagsFromText } from "../lib/flagParser.js";
 
 // ── HTML5 Void & Self-Closing Elements ───────────────────────────────────────
 const VOID_TAGS = new Set([
@@ -205,20 +206,31 @@ export default {
     privateOnly: false,
     registerRequired: false,
 
-    async handler({ message, sock, rawArgs, text, prefix }) {
+    flags: {
+        keep: { type: "boolean", char: "k", aliases: ["keep"] },
+    },
+
+    async handler({ message, sock, rawArgs, text, flags, prefix }) {
+        const schema = { keep: { type: "boolean", char: "k", aliases: ["keep"] } };
+        const extracted = extractFlagsFromText(rawArgs || text || "", schema);
+        const keepFlag = Boolean(flags?.keep || extracted.flags?.keep);
+
         // Resolve input from direct arguments or quoted message text
-        const rawInput = rawArgs || text;
-        let code = rawInput ? rawInput.trim() : (message.quoted?.text ? message.quoted.text.trim() : "");
+        let code = message.quoted?.text ? message.quoted.text.trim() : extracted.cleanText;
 
         if (!code) {
             return message.reply(
-                `╭━━━〔 🌐 *HTML RENDERER* 〕━━━\n` +
-                `┃ *Format:* \`${prefix}html <kode_html>\`\n` +
-                `┃ *Atau:* Balas pesan berisi kode HTML dengan \`${prefix}html\`\n` +
-                `┃\n` +
-                `┃ *Contoh:* \`${prefix}html <h1>Halo Dunia</h1>\`\n` +
-                `┃ _Tampilan interaktif otomatis dihapus dalam 2 menit._\n` +
-                `╰━━━━━━━━━━━━━━━━━━━━━`
+                `🌐 *HTML RENDERER*\n` +
+                `────────────────────────\n` +
+                `*📖 Format*\n` +
+                `⋄ \`${prefix}html <kode_html>\`\n` +
+                `⋄ Balas pesan berisi kode HTML dengan \`${prefix}html\`\n\n` +
+                `*💡 Contoh*\n` +
+                `⋄ \`${prefix}html -k <h1>Halo Dunia</h1>\`\n\n` +
+                `*⚙️ Flag*\n` +
+                `⋄ \`-k, --keep\` — Webview permanen (tidak auto-hapus)\n\n` +
+                `*ℹ️ Notes:* Tampilan interaktif otomatis dihapus dalam 2 menit jika tanpa flag -k.\n` +
+                `────────────────────────`
             );
         }
 
@@ -232,13 +244,12 @@ export default {
         const validation = validateHtml(code);
         if (!validation.valid) {
             return message.reply(
-                `╭━━━〔 ❌ *KODE HTML TIDAK VALID* 〕━━━\n` +
-                `┃ Kode tidak dapat dirender karena terdeteksi kesalahan:\n` +
-                `┃\n` +
-                `┃ ⚠️ *Error:* ${validation.error}\n` +
-                `┃\n` +
-                `┃ _Silakan periksa dan perbaiki sintaks kode Anda._\n` +
-                `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+                `❌ *KODE HTML TIDAK VALID*\n` +
+                `────────────────────────\n` +
+                `Kode tidak dapat dirender karena terdeteksi kesalahan:\n\n` +
+                `⚠️ *Error:* ${validation.error}\n\n` +
+                `_Silakan periksa dan perbaiki sintaks kode Anda._\n` +
+                `────────────────────────`
             );
         }
 
@@ -256,21 +267,26 @@ export default {
                 html: finalHtml
             });
 
-            await message.reply(
-                `🌐 *HTML Berhasil Dirender!*\n` +
-                `⏱️ _Tampilan interaktif ini akan otomatis dihapus dalam 2 menit._`
-            );
+            if (keepFlag) {
+                await message.reply(`🌐 *HTML Berhasil Dirender!*\n📌 _Webview ini bersifat permanen._`);
+            } else {
+                await message.reply(
+                    `🌐 *HTML Berhasil Dirender!*\n` +
+                    `⏱️ _Tampilan interaktif ini akan otomatis dihapus dalam 2 menit._\n` +
+                    `💡 _Gunakan \`-k\` atau \`--keep\` agar permanen._`
+                );
 
-            // Auto-delete HTML webview payload after 2 minutes (120,000 ms) to prevent viewport lag
-            if (sent?.key) {
-                setTimeout(() => {
-                    sock.sendMessage(message.chat, {
-                        delete: { ...sent.key, fromMe: true }
-                    }).catch(() => {});
-                }, 120000);
+                // Auto-delete HTML webview payload after 2 minutes (120,000 ms) to prevent viewport lag
+                if (sent?.key) {
+                    setTimeout(() => {
+                        sock.sendMessage(message.chat, {
+                            delete: { ...sent.key, fromMe: true }
+                        }).catch(() => {});
+                    }, 120000);
+                }
             }
         } catch (error) {
-            console.error("[HTML Command Error] Failed to render HTML:", error);
+            console.error("[HTML]", error);
             await message.reply("❌ Gagal merender HTML. Pastikan aplikasi WhatsApp Anda mendukung pesan interaktif.");
         }
     }

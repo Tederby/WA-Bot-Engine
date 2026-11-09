@@ -8,10 +8,8 @@
  *  4. Hot-reload handler + commands on file changes
  */
 
-// NOTE: NODE_TLS_REJECT_UNAUTHORIZED removed — was disabling TLS verification globally.
-// If you encounter SSL errors during development, set it per-request or use a custom agent.
-
 import fs from "fs";
+import path from "path";
 import {
   makeWASocket,
   fetchLatestBaileysVersion,
@@ -27,9 +25,11 @@ import chokidar from "chokidar";
 import { Messages } from "./lib/Messages.js";
 import { initCleanup } from "./services/cleanup.js";
 import { reloadCommand, initCommands, commandsDir } from "./commands/_registry.js";
+import { handleGroupParticipantsUpdate } from "./lib/events/group-participants.js";
 import { upsertBotRegistry, getUser, saveUser, banUser } from "./lib/database.js";
 import { resolveTarget } from "./lib/jidHelper.js";
 import setting from "./setting.js";
+import { logger as log } from "./lib/logger.js";
 
 // ── Initialize command registry (must happen after all static imports settle) ─
 await initCommands();
@@ -118,11 +118,14 @@ async function gracefulShutdown(signal) {
   console.log(`${TAG} | Received ${signal}, shutting down gracefully...`);
   if (currentSock) {
     try {
-      currentSock.end();
+      currentSock.ev.removeAllListeners();
+      currentSock.ws?.close();
+      currentSock.end?.();
       console.log(`${TAG} | WebSocket closed cleanly.`);
     } catch (e) {
       // Ignore errors during cleanup
     }
+    currentSock = null;
   }
   // Allow 2 seconds for cleanup before exit
   setTimeout(() => process.exit(0), 2000);
@@ -133,6 +136,18 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 async function connectToWhatsApp() {
   if (isSuspended) return;
+
+  // Clean up previous socket to prevent dual-socket session collisions
+  if (currentSock) {
+    try {
+      currentSock.ev.removeAllListeners();
+      currentSock.ws?.close();
+      currentSock.end?.();
+    } catch {
+      // Best-effort cleanup
+    }
+    currentSock = null;
+  }
 
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
   const { version } = await fetchLatestBaileysVersion();
@@ -147,8 +162,11 @@ async function connectToWhatsApp() {
     version,
     logger,
     markOnlineOnConnect: true,
+    keepAliveIntervalMs: 10000,
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 60000,
     generateHighQualityLinkPreview: true,
-    browser: Browsers.macOS("Chrome"),
+    browser: Browsers.ubuntu("Chrome"),
   });
 
   currentSock = sock;
@@ -173,6 +191,11 @@ async function connectToWhatsApp() {
     // ── Call rejection ─────────────────────────────────────────
     if (ev["call"]) {
       handleIncomingCall(ev["call"], sock);
+    }
+
+    // ── Group Participants Update ──────────────────────────────
+    if (ev["group-participants.update"]) {
+      handleGroupParticipantsUpdate(ev["group-participants.update"], sock);
     }
   });
 }
@@ -227,13 +250,73 @@ function handleConnectionUpdate(update, sock) {
       console.error(`${TAG} | Error details:`, lastDisconnect.error?.message || lastDisconnect.error);
     }
 
-    // Severe errors: loggedOut, multideviceMismatch, 401, 403
+    // Clean up current socket listeners immediately on close
+    if (currentSock) {
+      try {
+        currentSock.ev.removeAllListeners();
+        currentSock.ws?.close();
+        currentSock.end?.();
+      } catch {
+        // Best-effort cleanup
+      }
+      currentSock = null;
+    }
+
+    // ── Immediate 401 Logged Out Session Purge & Suspension ───
+    if (status === 401 || reason === "loggedOut") {
+      console.log(`${TAG} | 🛑 Session logged out (401 / loggedOut). Purging session directory...`);
+      try {
+        if (fs.existsSync(SESSION_DIR)) {
+          fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+          console.log(`${TAG} | Session directory successfully purged.`);
+        }
+      } catch (err) {
+        console.error(`${TAG} | Failed to purge session directory:`, err.message);
+      }
+      saveCycleCount(0);
+      reconnectAttempts = 0;
+      return suspendProgram(
+        `Session logged out (401). Session files purged. ` +
+        `Run 'pm2 restart ${BOT_ID}' to scan a new QR code or request Pairing Code.`
+      );
+    }
+
+    // ── Corrupted Session Handling (500 badSession) ─────────────
+    if (status === 500 || reason === "badSession") {
+      reconnectAttempts++;
+      if (reconnectAttempts <= 2) {
+        const delay = getBackoffDelay(reconnectAttempts, true);
+        console.log(
+          `${TAG} | ⚠️ Transient session corruption (500 badSession). ` +
+          `Retrying (${reconnectAttempts}/2) in ${delay / 1000}s...`
+        );
+        setTimeout(connectToWhatsApp, delay);
+        return;
+      }
+
+      console.log(`${TAG} | 🛑 Repeated badSession (500). Purging session directory...`);
+      try {
+        if (fs.existsSync(SESSION_DIR)) {
+          fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+          console.log(`${TAG} | Session directory successfully purged.`);
+        }
+      } catch (err) {
+        console.error(`${TAG} | Failed to purge session directory:`, err.message);
+      }
+      saveCycleCount(0);
+      reconnectAttempts = 0;
+      return suspendProgram(
+        `Session corrupted (badSession 500). Session files purged. ` +
+        `Run 'pm2 restart ${BOT_ID}' to scan a new QR code or request Pairing Code.`
+      );
+    }
+
+    // Severe errors: multideviceMismatch, 403, 411
     // Can be transient (network glitch), so still retry.
     const isHardError =
-      reason === "loggedOut" ||
       reason === "multideviceMismatch" ||
       status === 403 ||
-      status === 401;
+      status === 411;
 
     if (isHardError) {
       reconnectAttempts++;
@@ -245,14 +328,14 @@ function handleConnectionUpdate(update, sock) {
         if (cycleCount >= MAX_CYCLES) {
           // Total failure (MAX_RECONNECT_ATTEMPTS × MAX_CYCLES times).
           // Delete session and suspend — needs new QR scan.
-          console.log(`${TAG} | Total failure ${MAX_RECONNECT_ATTEMPTS * MAX_CYCLES}x (${MAX_CYCLES} cycles). Deleting session folder...`);
+          console.log(`${TAG} | Total failure ${MAX_RECONNECT_ATTEMPTS * MAX_CYCLES}x (${MAX_CYCLES} cycles). Deleting session directory...`);
           try {
             if (fs.existsSync(SESSION_DIR)) {
               fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-              console.log(`${TAG} | Session folder deleted successfully.`);
+              console.log(`${TAG} | Session directory deleted successfully.`);
             }
           } catch (err) {
-            console.error(`${TAG} | Failed to delete session folder:`, err.message);
+            console.error(`${TAG} | Failed to delete session directory:`, err.message);
           }
           saveCycleCount(0);
           return suspendProgram(
@@ -299,7 +382,7 @@ function handleConnectionUpdate(update, sock) {
 
   // ── Connection Open ─────────────────────────────────────────
   } else if (connection === "open") {
-    // Reset semua counter karena berhasil connect
+    // Reset all retry counters
     reconnectAttempts = 0;
     qrCount = 0;
     pairingCodeRequested = false;
@@ -328,7 +411,7 @@ function handleMessageUpsert(upsert, sock) {
     if (!(upsert.type === "append" && message.key && message.key.fromMe)) {
       return;
     }
-    // Jangan proses pesan append yang sudah terlalu lama (history sync)
+    // Don't process stale append messages (history sync)
     const now = Math.floor(Date.now() / 1000);
     if (now - message.messageTimestamp > 60) return;
   }
@@ -341,7 +424,7 @@ function handleMessageUpsert(upsert, sock) {
 
 // ── Call Dedup (prevents Baileys from firing multiple events per call) ──────
 const processedCalls = new Map();
-const CALL_DEDUP_TTL = 60_000; // 60 seconds
+const CALL_DEDUP_TTL = 3600000; // 1 hour
 
 setInterval(() => {
   const now = Date.now();
@@ -417,17 +500,16 @@ const handlerWatcher = chokidar.watch("./handler.js", {
 let handlerReloadCount = 0;
 
 handlerWatcher.on("change", async (filePath) => {
-  console.log(`[HOT-RELOAD] handler.js changed`);
   try {
     const newModule = await import(`./handler.js?cacheBust=${Date.now()}`);
     msgHandler = newModule.msgHandler;
     handlerReloadCount++;
-    console.log(`[HOT-RELOAD] Handler updated ✅ (reload #${handlerReloadCount})`);
+    log.info("HOT-RELOAD", `Handler updated (reload #${handlerReloadCount})`);
     if (handlerReloadCount >= 20) {
-      console.warn(`[HOT-RELOAD] ⚠️ ${handlerReloadCount} reloads — ESM cache-busting causes gradual memory leak. Consider 'pm2 restart ${BOT_ID}' to reclaim memory.`);
+      log.warn("HOT-RELOAD", `${handlerReloadCount} reloads — consider 'pm2 restart ${BOT_ID}' to reclaim memory.`);
     }
   } catch (err) {
-    console.error("[HOT-RELOAD] Handler reload failed ❌", err.message);
+    log.error("HOT-RELOAD", err);
   }
 });
 
@@ -439,14 +521,12 @@ const commandWatcher = chokidar.watch(commandsDir, {
 });
 
 commandWatcher.on("add", async (filePath) => {
-  // New command file added
   if (!filePath.endsWith(".js")) return;
-  console.log(`[HOT-RELOAD] New command file detected: ${filePath}`);
+  log.info("HOT-RELOAD", `New command: ${path.basename(filePath)}`);
   await reloadCommand(filePath);
 });
 
 commandWatcher.on("change", async (filePath) => {
-  // Existing command file changed
   if (!filePath.endsWith(".js")) return;
   await reloadCommand(filePath);
 });

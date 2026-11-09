@@ -8,4 +8,6 @@ package-lock.json
 database.db
 database.db-wal
 database.db-shm
+cycle_count.json
+temp.txt
 .agents/*

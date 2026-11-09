@@ -1,7 +1,7 @@
 /**
  * Message Handler — Clean Pipeline Architecture
  *
- * Pipeline: guard → ban-check → context → reply-handler → auto-detect → parse → spam-filter → permissions → execute
+ * Pipeline: guard → ban-check → context → reply-handler → auto-detect → parse → spam-filter → permissions → auto-register → flag-parsing → execute
  *
  * Each step is clearly separated. Adding new middleware (e.g. owner-only check,
  * group-only check) is straightforward via declarative command flags.
@@ -9,6 +9,7 @@
 
 import { msgFilter } from "./lib/utils.js";
 import { parseCommand } from "./lib/commandParser.js";
+import { parseFlags } from "./lib/flagParser.js";
 import { getCommand, getReplyHandler } from "./commands/_registry.js";
 import { buildContext } from "./lib/contextBuilder.js";
 import { runAutoDetects } from "./lib/autoDetect.js";
@@ -99,7 +100,7 @@ let msgHandler = async (upsert, sock, message) => {
         if (message.quoted && message.contextInfo?.stanzaId && !cmd) {
             const entry = getReplyHandler(message.contextInfo.stanzaId);
             if (entry) {
-                if (entry.state.userId !== ctx.sender) {
+                if (!entry.state.allowAnyUser && entry.state.userId !== ctx.sender) {
                     await message.reply("❌ Only the original sender can interact with this.");
                     return;
                 }
@@ -130,14 +131,14 @@ let msgHandler = async (upsert, sock, message) => {
 
         const cmdLabel = `${prefix}${commandName} [${args.length}]`;
 
-        // ── 4. Spam Filter (per-user per-chat) ──────────────────────
+        // ── 5. Spam Filter (per-user per-chat) ──────────────────────
         const spamKey = `${ctx.sender}_${message.chat}`;
         if (msgFilter.isFiltered(spamKey)) {
             return logger.spam(t, cmdLabel, ctx.pushname, ctx.isGroup, ctx.groupName);
         }
         msgFilter.addFilter(spamKey, setting.spamDelay);
 
-        // ── 5. Permission Guard (Middleware) ────────────────────────
+        // ── 6. Permission Guard (Middleware) ────────────────────────
         const guardMsg = checkPermissions(cmd, { ...ctx, chatId: message.chat });
         
         if (cmd.ownerOnly) {
@@ -152,14 +153,26 @@ let msgHandler = async (upsert, sock, message) => {
             return;
         }
 
-        // ── 6. Auto-Register (silent) ────────────────────────────────
+        // ── 7. Auto-Register (silent) ────────────────────────────────
         // If user is not yet registered in the database, silently
         // register them using their pushname as display name.
         if (!isRegistered(ctx.sender)) {
             registerUser(ctx.sender, ctx.pushname);
         }
 
-        // ── 7. Log & Execute ────────────────────────────────────────
+        // ── 8. Flag Parsing (declarative POSIX flags) ──────────────
+        let parsedFlags = {};
+        let effectiveArgs = args;
+        let cleanArgs = args;
+
+        if (cmd.flags) {
+            const flagResult = parseFlags(args, cmd.flags);
+            parsedFlags = flagResult.flags;
+            cleanArgs = flagResult.cleanArgs;
+            effectiveArgs = flagResult.cleanArgs;
+        }
+
+        // ── 9. Log & Execute ────────────────────────────────────────
         logger.exec(t, cmdLabel, ctx.pushname, ctx.isGroup, ctx.groupName);
         await sock.readMessages([message.key]);
 
@@ -167,8 +180,10 @@ let msgHandler = async (upsert, sock, message) => {
             message,
             sock,
             upsert,
-            args,
+            args: effectiveArgs,
+            cleanArgs,
             rawArgs,
+            flags: parsedFlags,
             prefix,
             commandName,
             ...ctx,
@@ -180,4 +195,4 @@ let msgHandler = async (upsert, sock, message) => {
 };
 
 export { msgHandler };
-export default { msgHandler };
+export default msgHandler;

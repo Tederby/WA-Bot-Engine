@@ -14,12 +14,12 @@ import setting from "../setting.js";
 import { cleanupExpiredReplyHandlers } from "../commands/_registry.js";
 import { purgeOldClaims } from "../lib/database.js";
 import db from "../lib/db.js";
-import { color } from "../lib/utils.js";
+import { logger } from "../lib/logger.js";
 
 let initialized = false;
 
 /**
- * Initialise the cleanup service.  Safe to call multiple times;
+ * Initialise the cleanup service. Safe to call multiple times;
  * only the first invocation has any effect.
  */
 export function initCleanup() {
@@ -43,22 +43,19 @@ export function initCleanup() {
         purgeOldClaims(setting.claimsPurgeAge);
 
         if (filesPurged + statesPurged > 0) {
-            console.log(
-                color("[CLEANUP]", "yellow"),
-                `files: ${filesPurged}, states: ${statesPurged}`
-            );
+            logger.info("CLEANUP", `files: ${filesPurged}, states: ${statesPurged}`);
         }
     }, setting.cleanupInterval);
 
-    console.log(color("[CLEANUP]", "yellow"), "Cleanup service initialized");
+    logger.info("CLEANUP", "Service initialized");
 
     // Periodic VACUUM to reclaim disk space
     setInterval(() => {
         try {
             db.exec("VACUUM");
-            console.log(color("[CLEANUP]", "yellow"), "VACUUM completed");
+            logger.info("CLEANUP", "VACUUM completed");
         } catch (e) {
-            console.error(color("[CLEANUP ERROR]", "red"), "VACUUM failed:", e.message);
+            logger.warn("CLEANUP", `VACUUM failed: ${e.message}`);
         }
     }, setting.vacuumInterval);
 }
@@ -74,10 +71,10 @@ function purgeAllTemp(tempDir) {
             fs.unlinkSync(path.join(tempDir, file));
         }
         if (files.length > 0) {
-            console.log(color("[CLEANUP]", "yellow"), `Startup purge: removed ${files.length} temp file(s)`);
+            logger.info("CLEANUP", `Startup purge: removed ${files.length} temp file(s)`);
         }
     } catch (e) {
-        console.error(color("[CLEANUP ERROR]", "red"), e.message);
+        logger.error("CLEANUP", `Startup purge error: ${e.message}`);
     }
 }
 
@@ -101,13 +98,13 @@ function cleanupTempFiles(tempDir, maxAgeMs) {
             }
         }
     } catch (e) {
-        console.error(color("[CLEANUP ERROR]", "red"), e.message);
+        logger.warn("CLEANUP", `Temp files cleanup error: ${e.message}`);
     }
     return count;
 }
 
 /**
- * Try to delete a specific file.  Swallows errors silently.
+ * Try to delete a specific file. Swallows errors silently.
  * @param {string} filePath
  */
 export function tryDelete(filePath) {

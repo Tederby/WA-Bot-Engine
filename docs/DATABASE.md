@@ -145,3 +145,23 @@ SQLite databases in WAL mode accumulate database pages and wal logs over time. W
 
 - **Stale Claims Purging**: Claims older than 5 minutes (`setting.claimsPurgeAge`) are purged periodically.
 - **Periodic VACUUM**: Executes `VACUUM` every 30 minutes (`setting.vacuumInterval`) to defragment the SQLite database file and reclaim unused disk space.
+
+---
+
+## 5. Database Maintenance & Repair (`repairDatabase()`)
+
+The engine provides an atomic maintenance routine in [`lib/database.js`](../lib/database.js):
+
+```javascript
+import { repairDatabase } from "./lib/database.js";
+const report = repairDatabase();
+```
+
+| Check / Operation | Rule | Affected Table |
+|:---|:---|:---|
+| **Integrity Check** | `PRAGMA integrity_check` verification | All database pages |
+| **Orphan Group Bans** | Remove ban records for groups no longer in `groups` | `group_banned_users` |
+| **Stale Claims Purge** | Delete claims older than **10 minutes** | `message_claims` |
+| **Stale Registry Purge** | Delete bot heartbeats inactive for **> 10 minutes** | `bot_registry` |
+| **Empty User Cleanup** | Delete guest records with no name, no meta, unbanned | `users` |
+

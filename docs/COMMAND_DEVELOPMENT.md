@@ -1,6 +1,6 @@
 # Command & UI Development Guide
 
-This guide covers everything you need to create commands, apply middleware security rules, handle user interactions, and render rich in-app HTML webview interfaces in **WA-Bot-Engine**.
+This guide covers everything you need to create commands, apply middleware security rules, handle user interactions, parse declarative CLI flags, format clean WhatsApp typography, and render rich in-app HTML webview interfaces in **WA-Bot-Engine**.
 
 ---
 
@@ -25,13 +25,20 @@ export default {
     ownerOnly: false,
     privateOnly: false,
     silentDrop: false,
-    multiBot: false,
+    multiBot: true,
+
+    // Optional POSIX Flag Schema (auto-parsed by handler.js via lib/flagParser.js)
+    flags: {
+        verbose: { type: "boolean", char: "v", aliases: ["detail"] },
+    },
 
     async handler({
         message,
         sock,
         args,
-        text,
+        cleanArgs,
+        rawArgs,
+        flags,
         sender,
         isGroup,
         pushname,
@@ -46,9 +53,13 @@ export default {
         commandName
     }) {
         const start = Date.now();
-        await message.reply("Pong!");
-        const latency = Date.now() - start;
-        await message.reply(`⚡ Latency: ${latency}ms`);
+        const latency = Math.max(0, Date.now() - message.messageTimestamp * 1000);
+        await message.reply(
+            `🏓 *PONG*\n` +
+            `────────────────────────\n` +
+            `⋄ Response : *${latency} ms*\n` +
+            `────────────────────────`
+        );
     }
 };
 ```
@@ -76,16 +87,14 @@ Rather than writing manual permission checks inside command bodies, define decla
 
 The `handler` method receives a consolidated context object:
 
-```javascript
-async handler(context) { ... }
-```
-
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `message` | `object` | Extended Baileys message object with helper methods (e.g. `message.reply(text)`). |
 | `sock` | `object` | Active Baileys `WASocket` connection instance. |
-| `args` | `string[]` | Command arguments split by whitespace (excluding the command name). |
-| `text` | `string` | Raw unparsed argument string following the command. |
+| `args` | `string[]` | Clean command arguments (positional arguments with flags stripped if `flags` schema is used). |
+| `cleanArgs` | `string[]` | Explicit positional arguments isolated from CLI flags. |
+| `rawArgs` | `string` | Raw unparsed argument string following the command name. |
+| `flags` | `object` | Key-value dictionary of parsed CLI flags according to the command's schema. |
 | `sender` | `string` | Canonical Phone Number JID of the sender (`<number>@s.whatsapp.net`). |
 | `isGroup` | `boolean` | `true` if executed in a group chat, `false` if in direct message. |
 | `pushname` | `string` | Sender's WhatsApp display name (falls back to JID if unset). |
@@ -101,14 +110,69 @@ async handler(context) { ... }
 
 ---
 
-## 4. Interactive HTML UI Engine (Webview)
+## 4. Declarative POSIX Flag System (`lib/flagParser.js`)
+
+WA-Bot-Engine includes a centralized CLI flag engine supporting standard POSIX and GNU flag conventions:
+
+### Features
+- **Long Flags**: `--keep`, `--verbose`, `--wait=5`
+- **Short Flags**: `-k`, `-v`, `-w 5`
+- **Clustered Short Flags**: `-tu` resolves to `-t` and `-u`
+- **Positional Isolation**: Flags are parsed into `flags`, while positional text remains in `cleanArgs` and `args`
+- **Termination Marker**: `--` stops flag parsing; all subsequent tokens are treated as positional arguments
+- **Freeform Extraction**: `extractFlagsFromText(text, schema)` extracts flags without corrupting multiline markdown or code blocks
+
+### Example Schema Definition
+
+```javascript
+flags: {
+    keep: { type: "boolean", char: "k", aliases: ["permanent"] },
+    wait: { type: "number", char: "w", default: 5 },
+    format: { type: "string", char: "f", default: "mp4" }
+}
+```
+
+---
+
+## 5. Clean Typography & Output Styling Standards
+
+To ensure optimal readability across mobile screens and prevent broken layouts caused by narrow viewport wrapping:
+
+### Rules
+1. **Header Format**: Bold uppercase title with leading emoji, followed by an exact 24-character divider line:
+   ```text
+   🏷️ *COMMAND TITLE*
+   ────────────────────────
+   ```
+2. **Key-Value Pairs**: Prefix items with diamond bullets (`⋄`):
+   ```text
+   ⋄ Status : *Active*
+   ⋄ Latency : *45 ms*
+   ```
+3. **Closing Divider**: Terminate structured cards with the matching 24-character line:
+   ```text
+   ────────────────────────
+   ```
+4. **No Box-Borders**: Avoid multi-line box drawing characters (`╭━━━`, `┃`, `╰━━━`) that wrap unpredictably on small smartphone viewports.
+5. **Dynamic Prefix**: Never hardcode `!` in command reply hints. Always use `const p = prefix || "!"`.
+
+---
+
+## 6. Shared Formatting Utilities (`lib/utils.js`)
+
+Centralized formatting helpers are available in `lib/utils.js`:
+
+| Export | Type | Description |
+|:---|:---|:---|
+| `ITEMS_PER_PAGE` | `number` (5) | Standard page size constant for search and list paginators. |
+| `generatePaginator(page, totalPages)` | `function` | Generates a clean pagination bar (`[ 📄 Page 1/3 ] ─── « ─ *1* ─ 2 ─ 3 ─ »`). |
+| `formatUptime(seconds, options)` | `function` | Converts uptime seconds to readable strings (`{ short: true }` for `1d 4h 12m 30s` or `{ short: false }` for full units). |
+
+---
+
+## 7. Interactive HTML UI Engine (Webview)
 
 WA-Bot-Engine includes a native UI engine ([`lib/uiEngine.js`](../lib/uiEngine.js)) that renders interactive HTML, CSS, and client-side JavaScript inside WhatsApp using the native `richResponseMessage` protocol.
-
-### Why Webview?
-- **Rich Presentations**: Tabbed dashboards, responsive cards, styled badges, and progress bars.
-- **Client-Side Interactivity**: Tab switching, search filtering, and state toggles happen instantly without waiting for network round-trips to the bot.
-- **Auto-Deletion Protection**: The engine automatically includes `fromMe: true` in return keys so messages can be revoked cleanly.
 
 ### Helper Functions
 
@@ -149,34 +213,11 @@ export default {
 };
 ```
 
-### In-App Navigation (Pseudo-Buttons)
-
-WhatsApp webview sandboxes external navigation, but allows hash-based anchor navigation:
-
-```html
-<!-- Tabs / Pseudo-Buttons -->
-<div class="tab-bar">
-    <a href="#overview" class="btn">Overview</a>
-    <a href="#stats" class="btn">Stats</a>
-</div>
-
-<!-- Tab Content Panels -->
-<div id="overview" class="tab-panel">Overview details...</div>
-<div id="stats" class="tab-panel" style="display:none;">Statistics...</div>
-
-<script>
-window.addEventListener('hashchange', () => {
-    const active = location.hash.replace('#', '') || 'overview';
-    document.querySelectorAll('.tab-panel').forEach(p => {
-        p.style.display = (p.id === active) ? 'block' : 'none';
-    });
-});
-</script>
-```
+> For deep protocol architecture, sandbox capabilities, and empirical constraints, consult [**`docs/WEBVIEW_PAYLOAD.md`**](WEBVIEW_PAYLOAD.md).
 
 ---
 
-## 5. Interactive Reply Handlers
+## 8. Interactive Reply Handlers
 
 When a command requires a follow-up response from the user (multi-step dialogs, confirmations):
 
@@ -200,12 +241,9 @@ export default {
 };
 ```
 
-- Handlers expire automatically after `setting.replyHandlerExpiry` (default: 15 minutes).
-- Security: The handler verifies `state.userId === ctx.sender` to prevent unauthorized users from answering another user's prompt.
-
 ---
 
-## 6. Auto-Detection Registry
+## 9. Auto-Detection Registry
 
 You can register URL patterns or triggers that execute without a standard command prefix using [`lib/autoDetect.js`](../lib/autoDetect.js):
 
@@ -226,7 +264,7 @@ registerAutoDetect({
 
 ---
 
-## 7. Working with JIDs and Mentions
+## 10. Working with JIDs and Mentions
 
 Always use [`lib/jidHelper.js`](../lib/jidHelper.js) when handling user targets:
 
@@ -239,11 +277,9 @@ export default {
     adminOnly: true,
     botAdminRequired: true,
     async handler({ message, sock, args, groupMetadata }) {
-        // Resolves target from: 1) @mention, 2) Quoted message sender, 3) Typed phone number
         const target = extractTarget(message, args);
         if (!target) return message.reply("Please mention a user or quote their message.");
 
-        // Find participant identifier matching group's addressing mode (LID or PN)
         const participant = findParticipant(groupMetadata, target.baseId);
         if (!participant) return message.reply("User is not in this group.");
 

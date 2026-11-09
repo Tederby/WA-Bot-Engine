@@ -4,6 +4,31 @@ All notable changes to **WA-Bot-Engine** are documented in this file. This proje
 
 ---
 
+## [1.2.0] — 2026-11-09
+
+### Added
+- **Centralized POSIX CLI Flag Parser (`lib/flagParser.js`)**: Standalone engine supporting short flags (`-f`), long flags (`--flag`), clustered flags (`-tu`), parameter values (`-w 5`), positional argument isolation (`cleanArgs`), and freeform text flag extraction (`extractFlagsFromText`).
+- **Pipeline Flag Parsing Stage**: Integrated declarative flag parsing directly into Stage 8 of `handler.js`, passing structured `flags` and `cleanArgs` to command handlers.
+- **Group Participant Event Handler (`lib/events/group-participants.js`)**: Listens to `group-participants.update` to automatically invalidate group metadata cache upon membership changes and support multi-bot greetings.
+- **Database Maintenance & Repair (`repairDatabase`)**: Added comprehensive SQLite repair function in `lib/database.js` performing integrity checks, orphan ban cleanup, and stale claim/registry pruning.
+- **Shared Formatting Utilities (`lib/utils.js`)**: Added `ITEMS_PER_PAGE`, `generatePaginator()`, and `formatUptime()` helpers.
+- **Webview Specification Suite (`docs/WEBVIEW_PAYLOAD.md`)**: Comprehensive documentation covering protobuf stanza architecture, 1350KB payload ceilings, and empirical sandbox constraints.
+
+### Fixed
+- **Socket Anti-Collision & Reconnection**: Explicitly removes WebSocket listeners and terminates old socket instances prior to reconnecting in `index.js`, eliminating dual-socket auth collisions on identical device keys.
+- **Corrupted Session Handling (500 badSession)**: Implemented 2-retry threshold before automatically purging corrupted session folders and safely suspending.
+- **Immediate 401 Session Purge**: Replaced endless reconnect loops on `401 Unauthorized` / `loggedOut` with immediate session wipe and clean suspension.
+- **Call Spam Protection**: Extended deduplication TTL from 60 seconds to 1 hour (3,600,000 ms) in `index.js`.
+- **Reply Handler Ownership**: Added `allowAnyUser` check to reply handlers in `handler.js`.
+
+### Changed
+- **Compact Standardized Logging (`lib/logger.js`)**: Overhauled console logger to single-line format with Chalk colors, status emojis, and timestamp tags.
+- **Standardized Output Typography**: Updated `commands/ping.js` and `commands/html.js` to 24-character divider lines (`────────────────────────`), bold uppercase headers, and diamond bullets (`⋄`).
+- **Command Flag Support in `!html`**: Added `--keep` (`-k`) flag support to disable 2-minute webview auto-deletion.
+- **Socket Timeouts**: Configured 10s keep-alive interval and 60s timeout thresholds to prevent VPS NAT router drops.
+
+---
+
 ## [1.1.0] — 2026-09-03
 
 ### Added

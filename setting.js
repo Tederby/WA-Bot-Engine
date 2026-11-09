@@ -9,7 +9,7 @@ const setting = {
     pairingNumber: process.env.PAIRING_NUMBER || "",
 
     // ── Spam Filter ─────────────────────────────────────────────────────
-    spamDelay: Number(process.env.SPAM_DELAY) || 5000, // ms cooldown per chat
+    spamDelay: Number(process.env.SPAM_DELAY) || 3000, // ms cooldown per chat
 
     // ── Phone Number Normalization ──────────────────────────────────
     // When users input local-format numbers (e.g. "08123..."), the engine

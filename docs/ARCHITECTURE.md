@@ -6,7 +6,7 @@ WA-Bot-Engine provides a lightweight, modular foundation for multi-instance What
 
 ## 1. Message Processing Pipeline
 
-Every incoming message received through Baileys' `messages.upsert` event passes through a sequential, 12-stage pipeline defined in [`handler.js`](../handler.js):
+Every incoming message received through Baileys' `messages.upsert` event passes through a sequential, 13-stage pipeline defined in [`handler.js`](../handler.js):
 
 ```mermaid
 flowchart TD
@@ -33,7 +33,8 @@ flowchart TD
     L -- Passed --> M{"Permission Middleware (lib/middleware.js)"}
     M -- Blocked / SILENT_DROP --> DropPerm["Send Warning or Silent Drop"]
     M -- Allowed --> N["6. Silent Auto-Registration"]
-    N --> O["Execute Command Handler"]
+    N --> O["7. Declarative Flag Parsing (lib/flagParser.js)"]
+    O --> P["Execute Command Handler"]
 ```
 
 ### Pipeline Stages Breakdown
@@ -45,11 +46,12 @@ flowchart TD
 5. **Command Parsing**: Identifies configured prefixes (default: `!`, `.`, `#`, `/`, `-`) and extracts `commandName`, `args`, and `rawArgs`.
 6. **Blocklist Check**: Compares sender against the bot's WhatsApp blocklist using a 60-second TTL cache to prevent network overhead.
 7. **Multi-Bot Claiming**: In multi-bot groups, bots coordinate via SQLite table `message_claims`. The bot with the highest priority claims the message; others drop it silently. Commands flagged with `multiBot: true` bypass this check.
-8. **Reply Handlers**: If the incoming message is a quoted reply to an interactive bot message, routes directly to the registered interactive handler.
+8. **Reply Handlers**: If the incoming message is a quoted reply to an interactive bot message, routes directly to the registered interactive handler (with `allowAnyUser` check).
 9. **Auto-Detect Patterns**: Evaluates registered regex patterns (via `registerAutoDetect`). If a match occurs, invokes the registered handler and stops pipeline progression.
-10. **Chat Spam Cooldown**: Enforces per-chat cooldowns (default: 5000ms) to protect the bot from rate limits and flooding.
+10. **Chat Spam Cooldown**: Enforces per-chat cooldowns (default: 3000ms) to protect the bot from rate limits and flooding.
 11. **Permission Middleware**: Validates declarative command flags (`groupOnly`, `adminOnly`, `botAdminRequired`, `ownerOnly`, `privateOnly`, `silentDrop`).
-12. **Auto-Registration & Execution**: Automatically records the user in SQLite on first command execution, logs the run via `logger.exec`, and calls `command.handler()`.
+12. **Auto-Registration**: Automatically records the user in SQLite on first command execution and logs the run via `logger.exec`.
+13. **Declarative Flag Parsing & Execution**: Evaluates command-defined POSIX flags schema (via `lib/flagParser.js`), passing clean positional arguments and parsed flags to `command.handler()`.
 
 ---
 
@@ -90,15 +92,12 @@ WA-Bot-Engine supports running multiple bot instances on a single machine or ser
 | **Message Claims** | **Shared** | `message_claims` table guarantees exactly one bot executes a command. |
 | **Heartbeat Registry**| **Shared** | `bot_registry` tracks active bot JIDs and priority order every 60s. |
 
-### Message Deduplication Mechanics
+### Socket Lifecycle & Reconnection Hardening
 
-When multiple bots share a group:
-1. Each bot attempts an atomic SQLite insert into `message_claims`:
-   ```sql
-   INSERT INTO message_claims (stanza_id, bot_id, created_at) VALUES (?, ?, ?);
-   ```
-2. Due to the `PRIMARY KEY (stanza_id)`, only the first transaction succeeds.
-3. If the insert fails with a unique constraint error, the bot drops the message silently.
+1. **Anti-Collision Socket Cleanup**: When reconnecting, previous WebSocket listeners and socket instances are explicitly purged (`removeAllListeners`, `ws.close`, `end`) before creating a new socket, eliminating dual-socket session collisions on identical device keys.
+2. **Immediate 401 Session Purge**: On `401 Unauthorized` / `loggedOut`, the bot immediately purges `sessions/session_<botId>` and suspends process execution without entering endless retry loops.
+3. **Corrupted Session Guard (`500 badSession`)**: Allows up to 2 transient retries with backoff before automatically wiping the corrupted session folder and suspending with clear restart instructions.
+4. **NAT Heartbeat**: Enforces a 10s keep-alive interval (`keepAliveIntervalMs: 10000`) and 60s timeout thresholds to prevent VPS firewalls from dropping idle WebSockets.
 
 ---
 
@@ -132,13 +131,7 @@ WhatsApp accounts are identified by two addressing formats:
 2. **Converting LID to PN**:  
    `resolveUserId(jid)` looks up the mapping in the SQLite `identity_map` table (populated passively during message exchanges).
 3. **Canonical Normalization Helper**:  
-   [`toCanonicalUserId(jid)`](../lib/database.js) combines both steps:
-   ```javascript
-   export function toCanonicalUserId(jid) {
-       if (!jid) return jid;
-       return resolveUserId(jidNormalizedUser(jid));
-   }
-   ```
+   [`toCanonicalUserId(jid)`](../lib/database.js) combines both steps.
 4. **Target Extraction**:  
    Commands use [`extractTarget(message, args)`](../lib/jidHelper.js) to resolve mentions, quoted messages, or typed phone numbers into canonical PN form.
 5. **Group API JID Lookup**:  
@@ -151,9 +144,21 @@ WhatsApp accounts are identified by two addressing formats:
 Unsolicited voice or video calls can freeze WhatsApp bot sockets. WA-Bot-Engine includes an automated call rejection and warning system in [`index.js`](../index.js):
 
 - **Auto-Rejection**: Calls are immediately rejected via `sock.rejectCall(id, chatId)`.
-- **Deduplication**: Baileys emits multiple events per call attempt. A 60-second in-memory `processedCalls` map prevents duplicate execution.
+- **Deduplication**: Baileys emits multiple events per call attempt. A 1-hour in-memory `processedCalls` map (`CALL_DEDUP_TTL = 3600000`) prevents duplicate execution.
 - **Progressive Warnings**:
   - **1st–2nd Call**: Informative warning notice sent to the caller.
   - **3rd Call**: Final warning notice.
   - **4th Call**: Automatic global ban recorded in SQLite via `banUser()`.
 - **Owner Exemption**: Numbers registered in `setting.owner` are never banned for calling.
+
+---
+
+## 6. Interactive HTML UI Engine (`lib/uiEngine.js`)
+
+WA-Bot-Engine includes a native in-app HTML rendering engine utilizing WhatsApp's undocumented `richResponseMessage` protocol (`GenAIaeacdsnwHtmlPrimitive`).
+
+- **In-App Webview**: Renders full HTML5, CSS3, and sandboxed client-side JavaScript inside WhatsApp chat threads without third-party web browsers.
+- **Zero-External Assets**: All styles, icons, and fonts reside locally or inline (Base64) due to strict air-gapped sandbox restrictions.
+- **Auto-Deletion Lifecycle**: Commands dispatching webview cards schedule auto-deletion (120 seconds) via message key tracking to prevent viewport performance degradation.
+
+> For complete protocol specifications, standalone Baileys implementation, the empirical Chromium capability matrix, stanza size boundaries, and copy chip mechanics, see [**`docs/WEBVIEW_PAYLOAD.md`**](WEBVIEW_PAYLOAD.md).
